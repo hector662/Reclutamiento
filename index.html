@@ -52,6 +52,7 @@
   .content { padding: 24px; }
   h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; color: var(--olive); }
   .sub { font-size: 13px; color: var(--text-dark); margin: 0 0 20px; }
+  .last-update { font-size: 12px; color: var(--matcha); margin: -14px 0 20px; display: flex; align-items: center; gap: 6px; }
 
   .topbar { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
   input, select, textarea {
@@ -143,6 +144,7 @@
 <div class="content">
   <h1>Pipeline de talento</h1>
   <p class="sub">Perfiles, CVs, comentarios y avance del equipo en un solo lugar.</p>
+  <p class="last-update" id="lastUpdate"></p>
 
   <div class="topbar">
     <input id="search" type="text" placeholder="Buscar por nombre" />
@@ -291,7 +293,22 @@ async function apiDeleteCandidate(id){
   }catch(e){ console.error('Error eliminando en Google Sheets', e); }
 }
 
+function renderLastUpdate(){
+  const el = document.getElementById('lastUpdate');
+  if(!el) return;
+  const stamps = candidates.map(c=>Number(c.updatedAt)||0).filter(Boolean);
+  const cargado = new Date().toLocaleString('es-MX', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+  if(stamps.length===0){
+    el.innerHTML = `<i class="ti ti-clock" style="font-size:14px"></i> Consultado el ${cargado}`;
+    return;
+  }
+  const ultima = new Date(Math.max(...stamps));
+  const txt = ultima.toLocaleString('es-MX', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+  el.innerHTML = `<i class="ti ti-clock" style="font-size:14px"></i> Último cambio: ${txt} · Consultado el ${cargado}`;
+}
+
 function render(){
+  renderLastUpdate();
   if(viewMode==='list'){ renderList(); return; }
   const search = (document.getElementById('search').value||'').toLowerCase();
   const board = document.getElementById('board');
