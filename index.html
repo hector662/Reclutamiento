@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mercanto · Pipeline de reclutamiento</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css" />
 <style>
@@ -139,6 +140,8 @@
   .field-warn { font-size: 11px; color: #993C1D; margin: 4px 0 0; }
   .card-link { color: var(--matcha); text-decoration: none; }
   .card-link:hover { color: var(--olive); }
+  .card-comments { color: var(--matcha); cursor: pointer; border-radius: 6px; padding: 1px 5px; margin: -1px -3px; display: inline-flex; align-items: center; }
+  .card-comments:hover { color: var(--olive); background: var(--mint); }
   .eval-header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
   .eval-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--white); flex-shrink: 0; }
   .eval-name { font-size: 14px; font-weight: 700; color: var(--text-black); }
@@ -231,7 +234,7 @@ function renderList(){
         ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
         ${normalizeUrl(c.linkedin) ? `<a href="${escapeHtml(normalizeUrl(c.linkedin))}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
         ${normalizeUrl(c.cv) ? `<a href="${escapeHtml(normalizeUrl(c.cv))}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file-text" style="font-size:14px;vertical-align:-2px;margin-right:2px"></i>CV</a>` : ''}
-        <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${totalComments(c)}</span>
+        <span class="card-comments" title="Ver y agregar comentarios" onclick="event.stopPropagation(); openModalComments('${c.id}')"><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${totalComments(c)}</span>
       </div>
     </div>`;
   }).join('');
@@ -522,7 +525,7 @@ function render(){
               ${normalizeUrl(c.linkedin) ? `<a href="${escapeHtml(normalizeUrl(c.linkedin))}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
               ${normalizeUrl(c.interviewLink) ? `<a href="${escapeHtml(normalizeUrl(c.interviewLink))}" target="_blank" rel="noopener" class="card-link" title="Abrir entrevista" onclick="event.stopPropagation()"><i class="ti ti-video" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
               ${normalizeUrl(c.cv) ? `<a href="${escapeHtml(normalizeUrl(c.cv))}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file-text" style="font-size:14px;vertical-align:-2px;margin-right:3px"></i>CV</a>` : ''}
-              <span title="Comentarios y evaluaciones"><i class="ti ti-message-circle" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>${totalComments(c)}</span>
+              <span class="card-comments" title="Ver y agregar comentarios" onclick="event.stopPropagation(); openModalComments('${c.id}')"><i class="ti ti-message-circle" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>${totalComments(c)}</span>
             </div>
           </div>`;
         }).join('')}
@@ -780,6 +783,13 @@ function openModal(id){
   }
 }
 function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+function openModalComments(id){
+  openModal(id);
+  const input = document.getElementById('fComment');
+  const list = document.getElementById('commentsList');
+  if(list) list.scrollIntoView({block:'center', behavior:'smooth'});
+  if(input) input.focus({preventScroll:true});
+}
 
 document.getElementById('btnAdd').addEventListener('click', ()=>openModal(null));
 document.getElementById('search').addEventListener('input', render);
