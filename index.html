@@ -118,6 +118,9 @@
 
   .card.stale { border-color: #F0997B; background: #FFF7F3; }
   .card-role { font-size: 11px; color: var(--text-blue); background: var(--lilac); padding: 2px 7px; border-radius: 999px; display: inline-block; font-weight: 600; }
+  .filter-count { font-size: 12px; color: var(--matcha); margin: -8px 0 14px; display: none; }
+  button.active-filter { background: var(--olive); color: var(--mint); border-color: var(--olive); }
+  button.active-filter:hover { background: var(--pinetree); }
   .card-age { font-size: 11px; color: var(--matcha); }
   .card-age.stale-text { color: #993C1D; font-weight: 600; }
   .panel-chip { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; display: inline-block; }
@@ -164,13 +167,18 @@
 
   <div class="topbar">
     <input id="search" type="text" placeholder="Buscar por nombre" />
-    <select id="filterRole" style="width:150px"></select>
+    <select id="filterRole" style="width:145px"></select>
+    <select id="filterStage" style="width:145px"></select>
+    <select id="filterPending" style="width:165px"></select>
+    <button id="btnStale" class="ghost" title="Solo candidatos estancados"><i class="ti ti-alert-triangle" style="font-size:15px;vertical-align:-2px;margin-right:4px"></i>Estancados</button>
+    <button id="btnClearFilters" class="ghost" title="Limpiar filtros"><i class="ti ti-x" style="font-size:15px;vertical-align:-2px"></i></button>
     <div class="view-toggle">
       <button id="btnViewBoard" class="active"><i class="ti ti-layout-kanban" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Tablero</button>
       <button id="btnViewList"><i class="ti ti-list" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Lista</button>
     </div>
     <button id="btnAdd"><i class="ti ti-plus" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Nuevo candidato</button>
   </div>
+  <p id="filterCount" class="filter-count"></p>
 
   <div id="board"></div>
   <div id="list" style="display:none"></div>
@@ -193,9 +201,8 @@ let viewMode = 'board';
 function stageStyle(key){ return STAGES.find(s=>s.key===key) || STAGES[0]; }
 
 function renderList(){
-  const search = (document.getElementById('search').value||'').toLowerCase();
   const list = document.getElementById('list');
-  const items = candidates.filter(c=> !search || c.name.toLowerCase().includes(search))
+  const items = candidates.filter(matchesFilters)
     .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
 
   if(items.length===0){
@@ -283,13 +290,13 @@ function panelSummary(c){
   const yes = votes.filter(v=>v==='Yes').length;
   const no = votes.filter(v=>v==='No').length;
   const maybe = votes.filter(v=>v==='Maybe').length;
-  let label = 'Sin evaluar', color = '#92939D', bg = '#EFF2F7';
+  let label = 'Sin evaluar', color = '#92939D', bg = '#EFF2F7', icon = '';
   if(done === 0){ /* default */ }
-  else if(yes > 0 && no > 0){ label = 'Panel dividido'; color = '#854F0B'; bg = '#FAEEDA'; }
-  else if(done === 3 && yes === 3){ label = 'Panel a favor'; color = '#0F6E56'; bg = '#E1F5EE'; }
-  else if(done === 3 && no >= 2){ label = 'Panel en contra'; color = '#993C1D'; bg = '#FAECE7'; }
-  else { label = done + ' de 3 evaluaron'; color = '#242A42'; bg = '#EAFAFF'; }
-  return { label, color, bg, done, yes, no, maybe };
+  else if(yes > 0 && no > 0){ label = 'Panel dividido'; color = '#854F0B'; bg = '#FAEEDA'; icon = 'ti-alert-triangle'; }
+  else if(done === 3 && yes === 3){ label = 'Panel a favor'; color = '#0F6E56'; bg = '#E1F5EE'; icon = 'ti-circle-check'; }
+  else if(done === 3 && no >= 2){ label = 'Panel en contra'; color = '#993C1D'; bg = '#FAECE7'; icon = 'ti-circle-x'; }
+  else { label = done + ' de 3 evaluaron'; color = '#242A42'; bg = '#EAFAFF'; icon = 'ti-hourglass'; }
+  return { label, color, bg, icon, done, yes, no, maybe };
 }
 function evalDots(c){
   const evals = [
@@ -297,9 +304,15 @@ function evalDots(c){
     {ini:'M', d:c.memoDecision, name:'Memo'},
     {ini:'J', d:c.jochoDecision, name:'Jocho'}
   ];
-  return `<span style="display:flex; gap:4px; align-items:center">` + evals.map(e=>
-    `<span title="${e.name}: ${e.d||'sin evaluar'}" style="width:14px;height:14px;border-radius:50%;background:${decisionColor(e.d)};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${e.ini}</span>`
-  ).join('') + `</span>`;
+  const glyph = {'Yes':'✓', 'No':'✕', 'Maybe':'~'};
+  return `<span style="display:flex; gap:3px; align-items:center">` + evals.map(e=>{
+    const votado = !!e.d;
+    const bg = decisionColor(e.d);
+    const style = votado
+      ? `background:${bg}; color:#fff; border:1px solid ${bg}`
+      : `background:#fff; color:#B4B2A9; border:1px dashed #C2CEDB`;
+    return `<span title="${e.name}: ${e.d || 'sin evaluar'}" style="${style}; height:18px; padding:0 5px; border-radius:9px; font-size:10px; font-weight:700; display:inline-flex; align-items:center; gap:2px; line-height:1">${e.ini}${votado ? '<span style="font-size:9px">'+glyph[e.d]+'</span>' : ''}</span>`;
+  }).join('') + `</span>`;
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
@@ -383,19 +396,65 @@ function renderMetrics(){
     </div>`;
 }
 
+let staleOnly = false;
+
 function renderRoleFilter(){
-  const sel = document.getElementById('filterRole');
-  if(!sel || sel.dataset.ready) return;
-  sel.innerHTML = '<option value="">Todos los roles</option>' + ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
-  sel.dataset.ready = '1';
+  const rol = document.getElementById('filterRole');
+  if(rol && !rol.dataset.ready){
+    rol.innerHTML = '<option value="">Todos los roles</option>' + ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
+    rol.dataset.ready = '1';
+  }
+  const etapa = document.getElementById('filterStage');
+  if(etapa && !etapa.dataset.ready){
+    etapa.innerHTML = '<option value="">Todas las etapas</option>' + STAGES.map(s=>`<option value="${s.key}">${s.key}</option>`).join('');
+    etapa.dataset.ready = '1';
+  }
+  const pend = document.getElementById('filterPending');
+  if(pend && !pend.dataset.ready){
+    pend.innerHTML = '<option value="">Cualquier evaluación</option>'
+      + '<option value="any">Falta alguien por evaluar</option>'
+      + '<option value="split">Panel dividido</option>'
+      + '<option value="Ximena">Falta Ximena</option>'
+      + '<option value="Memo">Falta Memo</option>'
+      + '<option value="Jocho">Falta Jocho</option>';
+    pend.dataset.ready = '1';
+  }
 }
 
 function matchesFilters(c){
   const search = (document.getElementById('search').value||'').toLowerCase();
   const role = (document.getElementById('filterRole')||{}).value || '';
-  const okSearch = !search || c.name.toLowerCase().includes(search);
-  const okRole = !role || c.role === role;
-  return okSearch && okRole;
+  const stage = (document.getElementById('filterStage')||{}).value || '';
+  const pending = (document.getElementById('filterPending')||{}).value || '';
+
+  if(search && !c.name.toLowerCase().includes(search)) return false;
+  if(role && c.role !== role) return false;
+  if(stage && c.status !== stage) return false;
+  if(staleOnly && !isStale(c)) return false;
+
+  if(pending){
+    const p = panelSummary(c);
+    if(pending === 'any' && p.done >= 3) return false;
+    else if(pending === 'split' && !(p.yes > 0 && p.no > 0)) return false;
+    else if(pending === 'Ximena' && c.ximenaDecision) return false;
+    else if(pending === 'Memo' && c.memoDecision) return false;
+    else if(pending === 'Jocho' && c.jochoDecision) return false;
+  }
+  return true;
+}
+
+function renderFilterCount(){
+  const el = document.getElementById('filterCount');
+  if(!el) return;
+  const activos = (document.getElementById('search').value||'').trim()
+    || (document.getElementById('filterRole')||{}).value
+    || (document.getElementById('filterStage')||{}).value
+    || (document.getElementById('filterPending')||{}).value
+    || staleOnly;
+  if(!activos){ el.textContent = ''; el.style.display = 'none'; return; }
+  const n = candidates.filter(matchesFilters).length;
+  el.style.display = 'block';
+  el.textContent = `Mostrando ${n} de ${candidates.length} candidatos con los filtros aplicados.`;
 }
 
 function renderLastUpdate(){
@@ -415,6 +474,7 @@ function renderLastUpdate(){
 function render(){
   renderMetrics();
   renderRoleFilter();
+  renderFilterCount();
   renderLastUpdate();
   if(viewMode==='list'){ renderList(); return; }
   const board = document.getElementById('board');
@@ -442,7 +502,7 @@ function render(){
               </div>
             </div>
             <div style="margin-top:8px">
-              <span class="panel-chip" style="background:${p.bg}; color:${p.color}">${p.label}</span>
+              <span class="panel-chip" style="background:${p.bg}; color:${p.color}">${p.icon ? `<i class="ti ${p.icon}" style="font-size:12px;vertical-align:-1px;margin-right:3px"></i>` : ''}${p.label}</span>
             </div>
             <div style="margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px">
               <span class="card-age ${stale?'stale-text':''}">
@@ -699,6 +759,23 @@ function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
 document.getElementById('btnAdd').addEventListener('click', ()=>openModal(null));
 document.getElementById('search').addEventListener('input', render);
+document.getElementById('filterRole').addEventListener('change', render);
+document.getElementById('filterStage').addEventListener('change', render);
+document.getElementById('filterPending').addEventListener('change', render);
+document.getElementById('btnStale').addEventListener('click', ()=>{
+  staleOnly = !staleOnly;
+  document.getElementById('btnStale').classList.toggle('active-filter', staleOnly);
+  render();
+});
+document.getElementById('btnClearFilters').addEventListener('click', ()=>{
+  document.getElementById('search').value = '';
+  document.getElementById('filterRole').value = '';
+  document.getElementById('filterStage').value = '';
+  document.getElementById('filterPending').value = '';
+  staleOnly = false;
+  document.getElementById('btnStale').classList.remove('active-filter');
+  render();
+});
 document.getElementById('btnViewBoard').addEventListener('click', ()=>setView('board'));
 document.getElementById('btnViewList').addEventListener('click', ()=>setView('list'));
 
