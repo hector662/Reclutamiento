@@ -136,6 +136,7 @@
   }
   .in-field-btn.active { color: var(--olive); pointer-events: auto; cursor: pointer; }
   .in-field-btn.active:hover { background: var(--mint); }
+  .field-warn { font-size: 11px; color: #993C1D; margin: 4px 0 0; }
   .card-link { color: var(--matcha); text-decoration: none; }
   .card-link:hover { color: var(--olive); }
   .eval-header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
@@ -228,8 +229,8 @@ function renderList(){
       <span class="list-status" style="background:${stage.bg}; color:${stage.fg}">${stage.key}</span>
       <div class="list-tags">
         ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
-        ${c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
-        ${c.cv ? `<a href="${escapeHtml(c.cv)}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file" style="font-size:14px;vertical-align:-2px;margin-right:2px"></i>CV</a>` : ''}
+        ${normalizeUrl(c.linkedin) ? `<a href="${escapeHtml(normalizeUrl(c.linkedin))}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
+        ${normalizeUrl(c.cv) ? `<a href="${escapeHtml(normalizeUrl(c.cv))}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file-text" style="font-size:14px;vertical-align:-2px;margin-right:2px"></i>CV</a>` : ''}
         <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${totalComments(c)}</span>
       </div>
     </div>`;
@@ -518,8 +519,9 @@ function render(){
             </div>
             <div class="card-tags">
               ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
-              ${c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
-              ${c.cv ? `<a href="${escapeHtml(c.cv)}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file" style="font-size:14px;vertical-align:-2px;margin-right:3px"></i>CV</a>` : ''}
+              ${normalizeUrl(c.linkedin) ? `<a href="${escapeHtml(normalizeUrl(c.linkedin))}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
+              ${normalizeUrl(c.interviewLink) ? `<a href="${escapeHtml(normalizeUrl(c.interviewLink))}" target="_blank" rel="noopener" class="card-link" title="Abrir entrevista" onclick="event.stopPropagation()"><i class="ti ti-video" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
+              ${normalizeUrl(c.cv) ? `<a href="${escapeHtml(normalizeUrl(c.cv))}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file-text" style="font-size:14px;vertical-align:-2px;margin-right:3px"></i>CV</a>` : ''}
               <span title="Comentarios y evaluaciones"><i class="ti ti-message-circle" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>${totalComments(c)}</span>
             </div>
           </div>`;
@@ -569,18 +571,30 @@ function waLink(num){
   return 'https://wa.me/'+full;
 }
 
+function normalizeUrl(v){
+  const s = (v||'').trim();
+  if(!s) return '';
+  if(/^https?:\/\//i.test(s)) return s;
+  // Solo lo tratamos como URL si parece un dominio (tiene punto y sin espacios)
+  if(/^[^\s]+\.[^\s]{2,}/.test(s) && !s.includes(' ')) return 'https://' + s;
+  return '';
+}
+
 function linkField(id, label, value, placeholder, href, icon){
-  const url = href || value;
-  const active = !!(value||'').trim();
+  const url = href !== undefined && href !== null ? href : normalizeUrl(value);
+  const active = !!url;
   const ico = icon || 'ti-external-link';
+  const hasText = !!(value||'').trim();
   const btn = active
     ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="in-field-btn active" title="Abrir en pestaña nueva" onclick="event.stopPropagation()"><i class="ti ${ico}"></i></a>`
-    : `<span class="in-field-btn"><i class="ti ${ico}"></i></span>`;
+    : `<span class="in-field-btn" title="${hasText ? 'No es un link válido — pega una URL que empiece con https://' : ''}"><i class="ti ${ico}"></i></span>`;
+  const warn = (hasText && !active)
+    ? `<p class="field-warn">Esto no es un link válido. Pega la URL completa (https://...).</p>` : '';
   return `<label>${label}</label>
   <div class="link-wrap">
     <input id="${id}" type="text" value="${escapeHtml(value)}" placeholder="${placeholder||''}" />
     ${btn}
-  </div>`;
+  </div>${warn}`;
 }
 
 function openModal(id){
