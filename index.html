@@ -108,6 +108,12 @@
   .modal textarea { min-height: 60px; resize: vertical; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
   .eval-card { background: var(--gray-9); border: 1px solid var(--gray-7); border-left: 3px solid var(--gray-6); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .link-row { display: flex; gap: 6px; align-items: center; }
+  .link-row input { flex: 1; min-width: 0; }
+  .link-open { display: flex; align-items: center; justify-content: center; width: 36px; height: 38px; flex-shrink: 0; border: 1px solid var(--gray-6); border-radius: 8px; background: var(--white); color: var(--olive); text-decoration: none; font-size: 16px; }
+  .link-open:hover { background: var(--mint); border-color: var(--olive); }
+  .card-link { color: var(--matcha); text-decoration: none; }
+  .card-link:hover { color: var(--olive); }
   .eval-header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
   .eval-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--white); flex-shrink: 0; }
   .eval-name { font-size: 14px; font-weight: 700; color: var(--text-black); }
@@ -189,8 +195,9 @@ function renderList(){
       </div>
       <span class="list-status" style="background:${stage.bg}; color:${stage.fg}">${stage.key}</span>
       <div class="list-tags">
-        ${c.linkedin ? `<span><i class="ti ti-brand-linkedin" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Li</span>` : ''}
-        ${c.cv ? `<span><i class="ti ti-file" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>CV</span>` : ''}
+        ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
+        ${c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
+        ${c.cv ? `<a href="${escapeHtml(c.cv)}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file" style="font-size:14px;vertical-align:-2px;margin-right:2px"></i>CV</a>` : ''}
         <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${totalComments(c)}</span>
       </div>
     </div>`;
@@ -248,7 +255,7 @@ function evalDots(c){
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
 function blank(){
-  return {id: uid(), name:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'',
+  return {id: uid(), name:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
     offerDate:'', startDate:'', endDate:'',
     memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
     jochoDecision:'', jochoFeedback:'', jochoInterviewDate:'', jochoNoteDate:'',
@@ -311,8 +318,9 @@ function render(){
             </div>
             <div class="card-tags">
               ${evalDots(c)}
-              ${c.linkedin ? `<span title="Tiene LinkedIn"><i class="ti ti-brand-linkedin" style="font-size:13px;vertical-align:-2px"></i></span>` : ''}
-              ${c.cv ? `<span title="Tiene CV"><i class="ti ti-file" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>CV</span>` : ''}
+              ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
+              ${c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
+              ${c.cv ? `<a href="${escapeHtml(c.cv)}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file" style="font-size:14px;vertical-align:-2px;margin-right:3px"></i>CV</a>` : ''}
               <span title="Comentarios y evaluaciones"><i class="ti ti-message-circle" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>${totalComments(c)}</span>
             </div>
           </div>`).join('')}
@@ -353,6 +361,23 @@ function decisionOptions(current){
   return opts.map(o=>`<option value="${o}" ${o===(current||'')?'selected':''}>${labels[o]}</option>`).join('');
 }
 
+function waLink(num){
+  const digits = (num||'').replace(/\D/g,'');
+  if(!digits) return '';
+  const full = digits.length === 10 ? '52'+digits : digits;
+  return 'https://wa.me/'+full;
+}
+
+function linkField(id, label, value, placeholder, href){
+  const url = href || value;
+  const open = url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="link-open" title="Abrir"><i class="ti ti-external-link"></i></a>` : '';
+  return `<label>${label}</label>
+  <div class="link-row">
+    <input id="${id}" type="text" value="${escapeHtml(value)}" placeholder="${placeholder||''}" />
+    ${open}
+  </div>`;
+}
+
 function openModal(id){
   const isNew = !id;
   const c = id ? candidates.find(x=>x.id===id) : blank();
@@ -374,12 +399,13 @@ function openModal(id){
             ${STAGES.map(s=>`<option value="${s.key}" ${s.key===c.status?'selected':''}>${s.key}</option>`).join('')}
           </select>
         </div>
-        <div>${field('fCv','CV (link)',c.cv,'https://drive.google.com/...')}</div>
+        <div>${linkField('fWhatsapp','WhatsApp',c.whatsapp,'55 1234 5678', waLink(c.whatsapp))}</div>
       </div>
       <div class="row2">
-        <div>${field('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...')}</div>
-        <div>${field('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...')}</div>
+        <div>${linkField('fCv','CV (link)',c.cv,'https://drive.google.com/...')}</div>
+        <div>${linkField('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...')}</div>
       </div>
+      ${linkField('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...')}
 
       <div class="section-label">Fechas</div>
       <div class="row2">
@@ -484,6 +510,7 @@ function openModal(id){
   document.getElementById('btnSave').onclick = async ()=>{
     c.name = document.getElementById('fName').value.trim() || 'Sin nombre';
     c.linkedin = document.getElementById('fLinkedin').value.trim();
+    c.whatsapp = document.getElementById('fWhatsapp').value.trim();
     c.status = document.getElementById('fStatus').value;
     c.interviewLink = document.getElementById('fInterviewLink').value.trim();
     c.cv = document.getElementById('fCv').value.trim();
