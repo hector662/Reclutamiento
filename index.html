@@ -294,6 +294,25 @@ function isStale(c){
   const d = stageDays(c);
   return d !== null && d >= STALE_DAYS;
 }
+function interviewDate(c){
+  const dates = [c.ximenaInterviewDate, c.memoInterviewDate, c.jochoInterviewDate].filter(Boolean);
+  if(!dates.length) return '';
+  const today = new Date().toISOString().slice(0,10);
+  const upcoming = dates.filter(d=>d>=today).sort();
+  return upcoming.length ? upcoming[0] : dates.sort()[dates.length-1];
+}
+function fmtShortDate(s){
+  if(!s) return '';
+  const parts = String(s).split('-').map(Number);
+  if(parts.length!==3 || parts.some(isNaN)) return '';
+  return new Date(parts[0], parts[1]-1, parts[2]).toLocaleDateString('es-MX', {day:'2-digit', month:'short'});
+}
+function stageDate(c){
+  if(c.status==='Entrevista'){ const d=interviewDate(c); return d ? {d, label:'Entrevista'} : null; }
+  if(c.status==='Oferta'){ return c.startDate ? {d:c.startDate, label:'Inicio'} : null; }
+  if(c.status==='Contratado'){ return c.startDate ? {d:c.startDate, label:'Inicio'} : null; }
+  return null;
+}
 function panelSummary(c){
   const votes = [c.ximenaDecision, c.memoDecision, c.jochoDecision];
   const done = votes.filter(v=>v).length;
@@ -502,6 +521,7 @@ function render(){
           const p = panelSummary(c);
           const d = stageDays(c);
           const stale = isStale(c);
+          const sd = stageDate(c);
           return `
           <div class="card ${stale?'stale':''}" draggable="true" data-id="${c.id}">
             <div class="card-top">
@@ -514,6 +534,7 @@ function render(){
             <div style="margin-top:8px">
               <span class="panel-chip" style="background:${p.bg}; color:${p.color}">${p.icon ? `<i class="ti ${p.icon}" style="font-size:12px;vertical-align:-1px;margin-right:3px"></i>` : ''}${p.label}</span>
             </div>
+            ${sd ? `<div style="margin-top:6px; font-size:11px; font-weight:600; color:var(--olive); display:flex; align-items:center; gap:4px"><i class="ti ti-calendar-event" style="font-size:12px"></i>${sd.label} ${fmtShortDate(sd.d)}</div>` : ''}
             <div style="margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px">
               <span class="card-age ${stale?'stale-text':''}">
                 ${stale ? '<i class="ti ti-alert-triangle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>' : ''}${d!==null ? (d===0 ? 'hoy' : d+'d en etapa') : ''}
