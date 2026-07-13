@@ -108,6 +108,20 @@
   .modal input, .modal select, .modal textarea { width: 100%; }
   .modal textarea { min-height: 60px; resize: vertical; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  #metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--white); border: 1px solid var(--gray-7); border-radius: 12px; padding: 14px 16px; }
+  .metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--matcha); font-weight: 700; margin: 0 0 6px; }
+  .metric-value { font-size: 26px; font-weight: 700; color: var(--olive); margin: 0; line-height: 1.1; }
+  .metric-sub { font-size: 11px; color: var(--matcha); margin: 4px 0 0; }
+  .metric.alert { border-color: #F0997B; background: #FFF7F3; }
+  .metric.alert .metric-value { color: #993C1D; }
+
+  .card.stale { border-color: #F0997B; background: #FFF7F3; }
+  .card-role { font-size: 11px; color: var(--text-blue); background: var(--lilac); padding: 2px 7px; border-radius: 999px; display: inline-block; font-weight: 600; }
+  .card-age { font-size: 11px; color: var(--matcha); }
+  .card-age.stale-text { color: #993C1D; font-weight: 600; }
+  .panel-chip { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; display: inline-block; }
+
   .eval-card { background: var(--gray-9); border: 1px solid var(--gray-7); border-left: 3px solid var(--gray-6); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
   .link-row { display: flex; gap: 6px; align-items: center; }
   .link-row input { flex: 1; min-width: 0; }
@@ -146,8 +160,11 @@
   <p class="sub">Perfiles, CVs, comentarios y avance del equipo en un solo lugar.</p>
   <p class="last-update" id="lastUpdate"></p>
 
+  <div id="metrics"></div>
+
   <div class="topbar">
     <input id="search" type="text" placeholder="Buscar por nombre" />
+    <select id="filterRole" style="width:150px"></select>
     <div class="view-toggle">
       <button id="btnViewBoard" class="active"><i class="ti ti-layout-kanban" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Tablero</button>
       <button id="btnViewList"><i class="ti ti-list" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Lista</button>
@@ -244,6 +261,36 @@ function decisionColor(d){
   if(d==='Maybe') return '#BA7517';
   return '#D3DCE6';
 }
+
+const STALE_DAYS = 7;
+const ACTIVE_STAGES = ['Postulado','Entrevista','Oferta'];
+
+function daysSince(ts){
+  if(!ts) return null;
+  return Math.floor((Date.now() - Number(ts)) / 86400000);
+}
+function stageDays(c){
+  return daysSince(c.statusChangedAt || c.updatedAt || c.createdAt);
+}
+function isStale(c){
+  if(!ACTIVE_STAGES.includes(c.status)) return false;
+  const d = stageDays(c);
+  return d !== null && d >= STALE_DAYS;
+}
+function panelSummary(c){
+  const votes = [c.ximenaDecision, c.memoDecision, c.jochoDecision];
+  const done = votes.filter(v=>v).length;
+  const yes = votes.filter(v=>v==='Yes').length;
+  const no = votes.filter(v=>v==='No').length;
+  const maybe = votes.filter(v=>v==='Maybe').length;
+  let label = 'Sin evaluar', color = '#92939D', bg = '#EFF2F7';
+  if(done === 0){ /* default */ }
+  else if(yes > 0 && no > 0){ label = 'Panel dividido'; color = '#854F0B'; bg = '#FAEEDA'; }
+  else if(done === 3 && yes === 3){ label = 'Panel a favor'; color = '#0F6E56'; bg = '#E1F5EE'; }
+  else if(done === 3 && no >= 2){ label = 'Panel en contra'; color = '#993C1D'; bg = '#FAECE7'; }
+  else { label = done + ' de 3 evaluaron'; color = '#242A42'; bg = '#EAFAFF'; }
+  return { label, color, bg, done, yes, no, maybe };
+}
 function evalDots(c){
   const evals = [
     {ini:'X', d:c.ximenaDecision, name:'Ximena'},
@@ -256,8 +303,11 @@ function evalDots(c){
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
+const ROLES = ['Sales Lead', 'KAM', 'BDR', 'Otro'];
+
 function blank(){
-  return {id: uid(), name:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
+  return {id: uid(), name:'', role:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
+    createdAt: Date.now(), statusChangedAt: Date.now(),
     offerDate:'', startDate:'', endDate:'',
     memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
     jochoDecision:'', jochoFeedback:'', jochoInterviewDate:'', jochoNoteDate:'',
@@ -293,6 +343,61 @@ async function apiDeleteCandidate(id){
   }catch(e){ console.error('Error eliminando en Google Sheets', e); }
 }
 
+function renderMetrics(){
+  const el = document.getElementById('metrics');
+  if(!el) return;
+  const activos = candidates.filter(c=>ACTIVE_STAGES.includes(c.status));
+  const estancados = candidates.filter(isStale);
+  const contratados = candidates.filter(c=>c.status==='Contratado').length;
+  const pendientes = activos.filter(c=>panelSummary(c).done < 3).length;
+  const divididos = candidates.filter(c=>{
+    const p = panelSummary(c);
+    return p.yes > 0 && p.no > 0;
+  }).length;
+
+  el.innerHTML = `
+    <div class="metric">
+      <p class="metric-label">En pipeline</p>
+      <p class="metric-value">${activos.length}</p>
+      <p class="metric-sub">${candidates.length} en total</p>
+    </div>
+    <div class="metric ${estancados.length ? 'alert' : ''}">
+      <p class="metric-label">Estancados</p>
+      <p class="metric-value">${estancados.length}</p>
+      <p class="metric-sub">+${STALE_DAYS} días sin moverse</p>
+    </div>
+    <div class="metric">
+      <p class="metric-label">Falta evaluar</p>
+      <p class="metric-value">${pendientes}</p>
+      <p class="metric-sub">panel incompleto</p>
+    </div>
+    <div class="metric ${divididos ? 'alert' : ''}">
+      <p class="metric-label">Panel dividido</p>
+      <p class="metric-value">${divididos}</p>
+      <p class="metric-sub">requieren discusión</p>
+    </div>
+    <div class="metric">
+      <p class="metric-label">Contratados</p>
+      <p class="metric-value">${contratados}</p>
+      <p class="metric-sub">cerrados con éxito</p>
+    </div>`;
+}
+
+function renderRoleFilter(){
+  const sel = document.getElementById('filterRole');
+  if(!sel || sel.dataset.ready) return;
+  sel.innerHTML = '<option value="">Todos los roles</option>' + ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
+  sel.dataset.ready = '1';
+}
+
+function matchesFilters(c){
+  const search = (document.getElementById('search').value||'').toLowerCase();
+  const role = (document.getElementById('filterRole')||{}).value || '';
+  const okSearch = !search || c.name.toLowerCase().includes(search);
+  const okRole = !role || c.role === role;
+  return okSearch && okRole;
+}
+
 function renderLastUpdate(){
   const el = document.getElementById('lastUpdate');
   if(!el) return;
@@ -308,15 +413,14 @@ function renderLastUpdate(){
 }
 
 function render(){
+  renderMetrics();
+  renderRoleFilter();
   renderLastUpdate();
   if(viewMode==='list'){ renderList(); return; }
-  const search = (document.getElementById('search').value||'').toLowerCase();
   const board = document.getElementById('board');
   board.innerHTML = STAGES.map(stage=>{
-    const items = candidates.filter(c=>{
-      const matches = !search || c.name.toLowerCase().includes(search);
-      return c.status===stage.key && matches;
-    }).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    const items = candidates.filter(c=> c.status===stage.key && matchesFilters(c))
+      .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
     return `
     <div class="col">
       <div class="col-header" style="background:${stage.bg}; color:${stage.fg}">
@@ -324,23 +428,36 @@ function render(){
         <span class="col-count">${items.length}</span>
       </div>
       <div class="dropzone" data-stage="${escapeHtml(stage.key)}">
-        ${items.map(c=>`
-          <div class="card" draggable="true" data-id="${c.id}">
+        ${items.map(c=>{
+          const p = panelSummary(c);
+          const d = stageDays(c);
+          const stale = isStale(c);
+          return `
+          <div class="card ${stale?'stale':''}" draggable="true" data-id="${c.id}">
             <div class="card-top">
               <div class="avatar">${initials(c.name)}</div>
-              <div style="min-width:0">
+              <div style="min-width:0; flex:1">
                 <p class="card-name">${escapeHtml(c.name)}</p>
-                ${c.startDate ? `<p class="card-meta">Inicio ${escapeHtml(c.startDate)}</p>` : ''}
+                ${c.role ? `<span class="card-role">${escapeHtml(c.role)}</span>` : ''}
               </div>
             </div>
-            <div class="card-tags">
+            <div style="margin-top:8px">
+              <span class="panel-chip" style="background:${p.bg}; color:${p.color}">${p.label}</span>
+            </div>
+            <div style="margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px">
+              <span class="card-age ${stale?'stale-text':''}">
+                ${stale ? '<i class="ti ti-alert-triangle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>' : ''}${d!==null ? (d===0 ? 'hoy' : d+'d en etapa') : ''}
+              </span>
               ${evalDots(c)}
+            </div>
+            <div class="card-tags">
               ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
               ${c.linkedin ? `<a href="${escapeHtml(c.linkedin)}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
               ${c.cv ? `<a href="${escapeHtml(c.cv)}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file" style="font-size:14px;vertical-align:-2px;margin-right:3px"></i>CV</a>` : ''}
               <span title="Comentarios y evaluaciones"><i class="ti ti-message-circle" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>${totalComments(c)}</span>
             </div>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
   }).join('');
@@ -359,6 +476,7 @@ function render(){
       const c = candidates.find(x=>x.id===dragId);
       if(c && c.status!==stage){
         c.status = stage;
+        c.statusChangedAt = Date.now();
         c.updatedAt = Date.now();
         await apiSaveCandidate(c);
         render();
@@ -411,13 +529,20 @@ function openModal(id){
       ${field('fName','Nombre',c.name,'Nombre del candidato')}
       <div class="row2">
         <div>
+          <label>Rol / vacante</label>
+          <select id="fRole">
+            <option value="">— Sin asignar</option>
+            ${ROLES.map(r=>`<option value="${r}" ${r===(c.role||'')?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div>
           <label>Status</label>
           <select id="fStatus">
             ${STAGES.map(s=>`<option value="${s.key}" ${s.key===c.status?'selected':''}>${s.key}</option>`).join('')}
           </select>
         </div>
-        <div>${linkField('fWhatsapp','WhatsApp',c.whatsapp,'55 1234 5678', waLink(c.whatsapp))}</div>
       </div>
+      ${linkField('fWhatsapp','WhatsApp',c.whatsapp,'55 1234 5678', waLink(c.whatsapp))}
       <div class="row2">
         <div>${linkField('fCv','CV (link)',c.cv,'https://drive.google.com/...')}</div>
         <div>${linkField('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...')}</div>
@@ -526,9 +651,14 @@ function openModal(id){
   };
   document.getElementById('btnSave').onclick = async ()=>{
     c.name = document.getElementById('fName').value.trim() || 'Sin nombre';
+    c.role = document.getElementById('fRole').value;
     c.linkedin = document.getElementById('fLinkedin').value.trim();
     c.whatsapp = document.getElementById('fWhatsapp').value.trim();
-    c.status = document.getElementById('fStatus').value;
+    const nuevoStatus = document.getElementById('fStatus').value;
+    if(nuevoStatus !== c.status){ c.statusChangedAt = Date.now(); }
+    c.status = nuevoStatus;
+    if(!c.createdAt) c.createdAt = Date.now();
+    if(!c.statusChangedAt) c.statusChangedAt = Date.now();
     c.interviewLink = document.getElementById('fInterviewLink').value.trim();
     c.cv = document.getElementById('fCv').value.trim();
     c.offerDate = document.getElementById('fOfferDate').value;
