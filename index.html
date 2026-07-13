@@ -96,7 +96,7 @@
   .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--lilac); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; color: var(--text-blue); flex-shrink: 0; }
   .card-name { font-size: 13px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card-meta { font-size: 11px; color: var(--matcha); margin: 0; }
-  .card-tags { display: flex; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--matcha); flex-wrap: wrap; }
+  .card-tags { display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--matcha); flex-wrap: wrap; align-items: center; }
 
   .modal-bg { position: fixed; inset: 0; background: rgba(18,18,18,0.5); display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; overflow-y: auto; z-index: 10; }
   .modal { background: var(--white); border-radius: 14px; width: 100%; max-width: 540px; padding: 1.25rem; }
@@ -191,7 +191,7 @@ function renderList(){
       <div class="list-tags">
         ${c.linkedin ? `<span><i class="ti ti-brand-linkedin" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Li</span>` : ''}
         ${c.cv ? `<span><i class="ti ti-file" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>CV</span>` : ''}
-        <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${(c.comments||[]).length}</span>
+        <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${totalComments(c)}</span>
       </div>
     </div>`;
   }).join('');
@@ -222,6 +222,29 @@ function setView(mode){
 }
 
 function uid(){ return 'c_'+Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+function totalComments(c){
+  let n = (c.comments||[]).length;
+  if((c.ximenaFeedback||'').trim()) n++;
+  if((c.memoFeedback||'').trim()) n++;
+  if((c.jochoFeedback||'').trim()) n++;
+  return n;
+}
+function decisionColor(d){
+  if(d==='Yes') return '#1D9E75';
+  if(d==='No') return '#D85A30';
+  if(d==='Maybe') return '#BA7517';
+  return '#D3DCE6';
+}
+function evalDots(c){
+  const evals = [
+    {ini:'X', d:c.ximenaDecision, name:'Ximena'},
+    {ini:'M', d:c.memoDecision, name:'Memo'},
+    {ini:'J', d:c.jochoDecision, name:'Jocho'}
+  ];
+  return `<span style="display:flex; gap:4px; align-items:center">` + evals.map(e=>
+    `<span title="${e.name}: ${e.d||'sin evaluar'}" style="width:14px;height:14px;border-radius:50%;background:${decisionColor(e.d)};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${e.ini}</span>`
+  ).join('') + `</span>`;
+}
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
 function blank(){
@@ -287,9 +310,10 @@ function render(){
               </div>
             </div>
             <div class="card-tags">
-              ${c.linkedin ? `<span><i class="ti ti-brand-linkedin" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Li</span>` : ''}
-              ${c.cv ? `<span><i class="ti ti-file" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>CV</span>` : ''}
-              <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${(c.comments||[]).length}</span>
+              ${evalDots(c)}
+              ${c.linkedin ? `<span title="Tiene LinkedIn"><i class="ti ti-brand-linkedin" style="font-size:13px;vertical-align:-2px"></i></span>` : ''}
+              ${c.cv ? `<span title="Tiene CV"><i class="ti ti-file" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>CV</span>` : ''}
+              <span title="Comentarios y evaluaciones"><i class="ti ti-message-circle" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>${totalComments(c)}</span>
             </div>
           </div>`).join('')}
       </div>
