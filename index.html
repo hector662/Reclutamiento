@@ -153,6 +153,16 @@
   .comment { background: var(--gray-9); border-radius: 8px; padding: 8px 10px; }
   .comment p { margin: 0; }
   .comment .meta { font-size: 11px; color: var(--matcha); margin-top: 4px; }
+
+  .score-badge { font-size: 13px; font-weight: 800; padding: 2px 9px; border-radius: 8px; flex-shrink: 0; line-height: 1.4; }
+  .rubric { display: flex; flex-direction: column; gap: 8px; }
+  .rub-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--gray-9); border: 1px solid var(--gray-7); border-radius: 8px; padding: 8px 12px; }
+  .rub-label { font-size: 13px; font-weight: 600; color: var(--text-dark); }
+  .stars { display: flex; gap: 3px; font-size: 22px; line-height: 1; }
+  .star { cursor: pointer; color: var(--gray-6); user-select: none; transition: color 0.05s; }
+  .star.on { color: #F5B301; }
+  .rub-score { font-size: 12px; color: var(--matcha); margin: 8px 0 0; text-align: right; }
+  .rub-score b { color: var(--olive); font-size: 14px; }
 </style>
 </head>
 <body>
@@ -182,6 +192,10 @@
     <select id="filterPending" style="width:165px"></select>
     <button id="btnStale" class="ghost" title="Solo candidatos estancados"><i class="ti ti-alert-triangle" style="font-size:15px;vertical-align:-2px;margin-right:4px"></i>Estancados</button>
     <button id="btnClearFilters" class="ghost" title="Limpiar filtros"><i class="ti ti-x" style="font-size:15px;vertical-align:-2px"></i></button>
+    <select id="sortBy" style="width:160px" title="Ordenar candidatos">
+      <option value="recent">Orden: reciente</option>
+      <option value="score">Orden: mejor score</option>
+    </select>
     <div class="view-toggle">
       <button id="btnViewBoard" class="active"><i class="ti ti-layout-kanban" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Tablero</button>
       <button id="btnViewList"><i class="ti ti-list" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Lista</button>
@@ -213,7 +227,7 @@ function stageStyle(key){ return STAGES.find(s=>s.key===key) || STAGES[0]; }
 function renderList(){
   const list = document.getElementById('list');
   const items = candidates.filter(matchesFilters)
-    .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    .sort(sortComparator);
 
   if(items.length===0){
     list.innerHTML = '<div class="empty-state">No hay candidatos que coincidan con la búsqueda.</div>';
@@ -222,6 +236,7 @@ function renderList(){
 
   list.innerHTML = items.map(c=>{
     const stage = stageStyle(c.status);
+    const rs = rubricScore(c);
     return `
     <div class="list-row" data-id="${c.id}">
       <div class="avatar">${initials(c.name)}</div>
@@ -229,6 +244,7 @@ function renderList(){
         <p class="list-name">${escapeHtml(c.name)}</p>
         <p class="list-meta">${c.startDate ? 'Inicio ' + escapeHtml(c.startDate) : 'Sin fecha de inicio'}</p>
       </div>
+      ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Score de rúbrica · ${rs.filled} de 4 criterios">${rs.score}</span>` : ''}
       <span class="list-status" style="background:${stage.bg}; color:${stage.fg}">${stage.key}</span>
       <div class="list-tags">
         ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
@@ -347,6 +363,67 @@ function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<
 function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
 const ROLES = ['Sales Lead', 'KAM', 'BDR', 'Otro'];
 
+const RUBRIC = [
+  {key:'rubricCultura',     label:'Cultura'},
+  {key:'rubricExperiencia', label:'Experiencia'},
+  {key:'rubricComunicacion',label:'Comunicación'},
+  {key:'rubricPotencial',   label:'Potencial'}
+];
+function rubricScore(c){
+  const vals = RUBRIC.map(r=>Number(c[r.key])||0).filter(v=>v>0);
+  if(!vals.length) return null;
+  const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+  return { score: Math.round(avg*20), filled: vals.length, avg };
+}
+function scoreColor(s){
+  if(s>=80) return {fg:'#0F6E56', bg:'#E1F5EE'};
+  if(s>=60) return {fg:'#854F0B', bg:'#FAEEDA'};
+  return {fg:'#993C1D', bg:'#FAECE7'};
+}
+let sortMode = 'recent';
+function sortComparator(a,b){
+  if(sortMode==='score'){
+    const sa = (rubricScore(a)||{score:-1}).score;
+    const sb = (rubricScore(b)||{score:-1}).score;
+    if(sb!==sa) return sb-sa;
+  }
+  return (b.updatedAt||0)-(a.updatedAt||0);
+}
+function paintStars(id, upto){
+  const input = document.getElementById(id);
+  if(!input) return;
+  input.parentElement.querySelectorAll('.star').forEach(s=>{
+    s.classList.toggle('on', Number(s.dataset.v) <= upto);
+  });
+}
+function setStar(id, v){
+  const input = document.getElementById(id);
+  const nv = (Number(input.value)===v) ? 0 : v;
+  input.value = String(nv);
+  paintStars(id, nv);
+  updateRubScore();
+}
+function updateRubScore(){
+  const el = document.getElementById('rubScoreLive');
+  if(!el) return;
+  const tmp = {};
+  RUBRIC.forEach(r=>{ const inp = document.getElementById('fld_'+r.key); tmp[r.key] = inp ? inp.value : ''; });
+  const rs = rubricScore(tmp);
+  el.innerHTML = rs ? `Score: <b>${rs.score}/100</b> · ${rs.filled} de 4 criterios` : 'Sin calificar todavía';
+}
+function hoverStar(id, v){
+  const input = document.getElementById(id);
+  paintStars(id, v || (Number(input.value)||0));
+}
+function starRating(id, value){
+  value = Number(value)||0;
+  let html = `<div class="stars"><input type="hidden" id="${id}" value="${value}">`;
+  for(let i=1;i<=5;i++){
+    html += `<span class="star ${i<=value?'on':''}" data-v="${i}" onclick="setStar('${id}',${i})" onmouseover="hoverStar('${id}',${i})" onmouseout="hoverStar('${id}',0)">★</span>`;
+  }
+  return html + `</div>`;
+}
+
 function blank(){
   return {id: uid(), name:'', role:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
     createdAt: Date.now(), statusChangedAt: Date.now(),
@@ -354,6 +431,7 @@ function blank(){
     memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
     jochoDecision:'', jochoFeedback:'', jochoInterviewDate:'', jochoNoteDate:'',
     ximenaDecision:'', ximenaFeedback:'', ximenaComp:'', ximenaInterviewDate:'', ximenaNoteDate:'',
+    rubricCultura:'', rubricExperiencia:'', rubricComunicacion:'', rubricPotencial:'',
     ref1:'', ref2:'', comments:[], updatedAt:Date.now()};
 }
 
@@ -509,7 +587,7 @@ function render(){
   const board = document.getElementById('board');
   board.innerHTML = STAGES.map(stage=>{
     const items = candidates.filter(c=> c.status===stage.key && matchesFilters(c))
-      .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+      .sort(sortComparator);
     return `
     <div class="col">
       <div class="col-header" style="background:${stage.bg}; color:${stage.fg}">
@@ -522,6 +600,7 @@ function render(){
           const d = stageDays(c);
           const stale = isStale(c);
           const sd = stageDate(c);
+          const rs = rubricScore(c);
           return `
           <div class="card ${stale?'stale':''}" draggable="true" data-id="${c.id}">
             <div class="card-top">
@@ -530,6 +609,7 @@ function render(){
                 <p class="card-name">${escapeHtml(c.name)}</p>
                 ${c.role ? `<span class="card-role">${escapeHtml(c.role)}</span>` : ''}
               </div>
+              ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Score de rúbrica · ${rs.filled} de 4 criterios">${rs.score}</span>` : ''}
             </div>
             <div style="margin-top:8px">
               <span class="panel-chip" style="background:${p.bg}; color:${p.color}">${p.icon ? `<i class="ti ${p.icon}" style="font-size:12px;vertical-align:-1px;margin-right:3px"></i>` : ''}${p.label}</span>
@@ -716,6 +796,16 @@ function openModal(id){
         <textarea id="fJochoFeedback" placeholder="Comentarios de Jocho">${escapeHtml(c.jochoFeedback)}</textarea>
       </div>
 
+      <div class="section-label">Calificación del candidato</div>
+      <div class="rubric">
+        ${RUBRIC.map(r=>`
+          <div class="rub-row">
+            <span class="rub-label">${r.label}</span>
+            ${starRating('fld_'+r.key, c[r.key])}
+          </div>`).join('')}
+      </div>
+      <p class="rub-score" id="rubScoreLive"></p>
+
       <div class="section-label">Referencias y comentarios</div>
       <div class="row2">
         <div>${field('fRef1','Referencia 1',c.ref1,'Nombre y contacto')}</div>
@@ -744,6 +834,7 @@ function openModal(id){
   </div>`;
 
   document.getElementById('btnClose').onclick = closeModal;
+  updateRubScore();
   document.getElementById('btnAddComment').onclick = async ()=>{
     const text = document.getElementById('fComment').value.trim();
     if(!text) return;
@@ -787,6 +878,7 @@ function openModal(id){
     c.ximenaFeedback = document.getElementById('fXimenaFeedback').value.trim();
     c.ref1 = document.getElementById('fRef1').value.trim();
     c.ref2 = document.getElementById('fRef2').value.trim();
+    RUBRIC.forEach(r=>{ c[r.key] = document.getElementById('fld_'+r.key).value; });
     c.updatedAt = Date.now();
     const idx = candidates.findIndex(x=>x.id===c.id);
     if(idx>=0) candidates[idx] = c; else candidates.push(c);
@@ -831,6 +923,7 @@ document.getElementById('btnClearFilters').addEventListener('click', ()=>{
   document.getElementById('btnStale').classList.remove('active-filter');
   render();
 });
+document.getElementById('sortBy').addEventListener('change', e=>{ sortMode = e.target.value; render(); });
 document.getElementById('btnViewBoard').addEventListener('click', ()=>setView('board'));
 document.getElementById('btnViewList').addEventListener('click', ()=>setView('list'));
 
