@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mercanto · Pipeline de reclutamiento</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css" />
 <style>
   :root {
@@ -126,10 +127,15 @@
   .panel-chip { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; display: inline-block; }
 
   .eval-card { background: var(--gray-9); border: 1px solid var(--gray-7); border-left: 3px solid var(--gray-6); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
-  .link-row { display: flex; gap: 6px; align-items: center; }
-  .link-row input { flex: 1; min-width: 0; }
-  .link-open { display: flex; align-items: center; justify-content: center; width: 36px; height: 38px; flex-shrink: 0; border: 1px solid var(--gray-6); border-radius: 8px; background: var(--white); color: var(--olive); text-decoration: none; font-size: 16px; }
-  .link-open:hover { background: var(--mint); border-color: var(--olive); }
+  .link-wrap { position: relative; display: block; }
+  .link-wrap input { width: 100%; padding-right: 38px; }
+  .in-field-btn {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; font-size: 15px; color: var(--gray-5); text-decoration: none; pointer-events: none;
+  }
+  .in-field-btn.active { color: var(--olive); pointer-events: auto; cursor: pointer; }
+  .in-field-btn.active:hover { background: var(--mint); }
   .card-link { color: var(--matcha); text-decoration: none; }
   .card-link:hover { color: var(--olive); }
   .eval-header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
@@ -563,13 +569,17 @@ function waLink(num){
   return 'https://wa.me/'+full;
 }
 
-function linkField(id, label, value, placeholder, href){
+function linkField(id, label, value, placeholder, href, icon){
   const url = href || value;
-  const open = url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="link-open" title="Abrir"><i class="ti ti-external-link"></i></a>` : '';
+  const active = !!(value||'').trim();
+  const ico = icon || 'ti-external-link';
+  const btn = active
+    ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="in-field-btn active" title="Abrir en pestaña nueva" onclick="event.stopPropagation()"><i class="ti ${ico}"></i></a>`
+    : `<span class="in-field-btn"><i class="ti ${ico}"></i></span>`;
   return `<label>${label}</label>
-  <div class="link-row">
+  <div class="link-wrap">
     <input id="${id}" type="text" value="${escapeHtml(value)}" placeholder="${placeholder||''}" />
-    ${open}
+    ${btn}
   </div>`;
 }
 
@@ -582,7 +592,7 @@ function openModal(id){
     <div class="modal">
       <div class="modal-header">
         <p class="modal-title">${isNew ? 'Nuevo candidato' : 'Editar candidato'}</p>
-        <button class="icon-btn" id="btnClose" aria-label="Cerrar"><i class="ti ti-x"></i></button>
+        <button class="icon-btn" id="btnClose" aria-label="Cerrar" style="font-size:18px; line-height:1">&times;</button>
       </div>
 
       <div class="section-label">Datos</div>
@@ -602,12 +612,12 @@ function openModal(id){
           </select>
         </div>
       </div>
-      ${linkField('fWhatsapp','WhatsApp',c.whatsapp,'55 1234 5678', waLink(c.whatsapp))}
+      ${linkField('fWhatsapp','WhatsApp',c.whatsapp,'55 1234 5678', waLink(c.whatsapp), 'ti-brand-whatsapp')}
       <div class="row2">
-        <div>${linkField('fCv','CV (link)',c.cv,'https://drive.google.com/...')}</div>
-        <div>${linkField('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...')}</div>
+        <div>${linkField('fCv','CV (link)',c.cv,'https://drive.google.com/...', null, 'ti-file-text')}</div>
+        <div>${linkField('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...', null, 'ti-brand-linkedin')}</div>
       </div>
-      ${linkField('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...')}
+      ${linkField('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...', null, 'ti-video')}
 
       <div class="section-label">Fechas</div>
       <div class="row2">
