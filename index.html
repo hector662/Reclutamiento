@@ -100,12 +100,17 @@
 
   .modal-bg { position: fixed; inset: 0; background: rgba(18,18,18,0.5); display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; overflow-y: auto; z-index: 10; }
   .modal { background: var(--white); border-radius: 14px; width: 100%; max-width: 540px; padding: 1.25rem; }
-  .modal label { font-size: 13px; color: var(--text-dark); display: block; margin-top: 10px; margin-bottom: 4px; font-weight: 500; }
+  .section-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--matcha); font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 22px 0 12px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--gray-7); }
+  .section-label:first-of-type { margin-top: 6px; }
+  .modal label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--matcha); display: block; margin-top: 10px; margin-bottom: 4px; font-weight: 600; }
   .modal input, .modal select, .modal textarea { width: 100%; }
   .modal textarea { min-height: 60px; resize: vertical; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
-  .section { border-top: 1px solid var(--gray-7); padding-top: 10px; margin-top: 12px; }
-  .section-title { font-size: 13px; font-weight: 700; color: var(--olive); margin: 0 0 2px; }
+  .eval-card { background: var(--gray-9); border: 1px solid var(--gray-7); border-left: 3px solid var(--gray-6); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .eval-header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .eval-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--white); flex-shrink: 0; }
+  .eval-name { font-size: 14px; font-weight: 700; color: var(--text-black); }
   .modal-header { display: flex; justify-content: space-between; align-items: center; }
   .modal-title { font-weight: 700; font-size: 17px; margin: 0; color: var(--olive); }
   .icon-btn { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--gray-9); border-color: var(--gray-6); color: var(--text-dark); }
@@ -222,22 +227,38 @@ function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w
 function blank(){
   return {id: uid(), name:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'',
     offerDate:'', startDate:'', endDate:'',
-    memoDecision:'', memoFeedback:'', memoComp:'',
-    jochoDecision:'', jochoFeedback:'',
-    ximenaDecision:'', ximenaFeedback:'',
+    memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
+    jochoDecision:'', jochoFeedback:'', jochoInterviewDate:'', jochoNoteDate:'',
+    ximenaDecision:'', ximenaFeedback:'', ximenaComp:'', ximenaInterviewDate:'', ximenaNoteDate:'',
     ref1:'', ref2:'', comments:[], updatedAt:Date.now()};
 }
 
+const API_URL = 'https://script.google.com/macros/s/AKfycbxTItdwrRgZrUf9Yfy9uEfEI9-N6VVQh0V7Ce5z1zcoR6MLCNXqR87trFF9wIlGtS7G/exec';
+
 async function loadData(){
   try{
-    const res = await window.storage.get('candidates_v3', true);
-    candidates = res && res.value ? JSON.parse(res.value) : [];
-  }catch(e){ candidates = []; }
+    const res = await fetch(API_URL);
+    candidates = await res.json();
+  }catch(e){ candidates = []; console.error('Error cargando desde Google Sheets', e); }
   render();
 }
-async function saveData(){
-  try{ await window.storage.set('candidates_v3', JSON.stringify(candidates), true); }
-  catch(e){ console.error('Error guardando', e); }
+async function apiSaveCandidate(candidate){
+  try{
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'save', candidate })
+    });
+  }catch(e){ console.error('Error guardando en Google Sheets', e); }
+}
+async function apiDeleteCandidate(id){
+  try{
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'delete', id })
+    });
+  }catch(e){ console.error('Error eliminando en Google Sheets', e); }
 }
 
 function render(){
@@ -290,7 +311,7 @@ function render(){
       if(c && c.status!==stage){
         c.status = stage;
         c.updatedAt = Date.now();
-        await saveData();
+        await apiSaveCandidate(c);
         render();
       }
     });
@@ -300,6 +321,12 @@ function render(){
 function field(id, label, value, placeholder, type){
   type = type || 'text';
   return `<label>${label}</label><input id="${id}" type="${type}" value="${escapeHtml(value)}" placeholder="${placeholder||''}" />`;
+}
+
+function decisionOptions(current){
+  const opts = ['', 'Yes', 'No', 'Maybe'];
+  const labels = {'':'— (sin evaluar)', 'Yes':'Yes', 'No':'No', 'Maybe':'Maybe'};
+  return opts.map(o=>`<option value="${o}" ${o===(current||'')?'selected':''}>${labels[o]}</option>`).join('');
 }
 
 function openModal(id){
@@ -314,65 +341,99 @@ function openModal(id){
         <button class="icon-btn" id="btnClose" aria-label="Cerrar"><i class="ti ti-x"></i></button>
       </div>
 
+      <div class="section-label">Datos</div>
       ${field('fName','Nombre',c.name,'Nombre del candidato')}
-      ${field('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...')}
-      <label>Status</label>
-      <select id="fStatus">
-        ${STAGES.map(s=>`<option value="${s.key}" ${s.key===c.status?'selected':''}>${s.key}</option>`).join('')}
-      </select>
-      ${field('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...')}
-      ${field('fCv','CV (link)',c.cv,'https://drive.google.com/...')}
-
       <div class="row2">
-        ${field('fOfferDate','Offer date',c.offerDate,'','date')}
-        ${field('fStartDate','Start date',c.startDate,'','date')}
+        <div>
+          <label>Status</label>
+          <select id="fStatus">
+            ${STAGES.map(s=>`<option value="${s.key}" ${s.key===c.status?'selected':''}>${s.key}</option>`).join('')}
+          </select>
+        </div>
+        <div>${field('fCv','CV (link)',c.cv,'https://drive.google.com/...')}</div>
+      </div>
+      <div class="row2">
+        <div>${field('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...')}</div>
+        <div>${field('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...')}</div>
+      </div>
+
+      <div class="section-label">Fechas</div>
+      <div class="row2">
+        <div>${field('fOfferDate','Offer date',c.offerDate,'','date')}</div>
+        <div>${field('fStartDate','Start date',c.startDate,'','date')}</div>
       </div>
       ${field('fEndDate','Fecha de salida',c.endDate,'','date')}
 
-      <div class="section">
-        <p class="section-title">Memo</p>
-        <div class="row2">
-          ${field('fMemoDecision','Decision',c.memoDecision,'Yes / No / Maybe')}
-          ${field('fMemoComp','Compensation',c.memoComp,'$')}
+      <div class="section-label">Evaluaciones del panel</div>
+
+      <div class="eval-card" style="border-left-color:#D85A30">
+        <div class="eval-header">
+          <span class="eval-avatar" style="background:#D85A30">X</span>
+          <span class="eval-name">Ximena · Líder de RH</span>
         </div>
-        <label>Feedback</label>
-        <textarea id="fMemoFeedback" placeholder="Comentarios de Memo">${escapeHtml(c.memoFeedback)}</textarea>
-      </div>
-
-      <div class="section">
-        <p class="section-title">Jocho</p>
-        ${field('fJochoDecision','Decision',c.jochoDecision,'Yes / No / Maybe')}
-        <label>Feedback</label>
-        <textarea id="fJochoFeedback" placeholder="Comentarios de Jocho">${escapeHtml(c.jochoFeedback)}</textarea>
-      </div>
-
-      <div class="section">
-        <p class="section-title">Ximena (Líder de RH)</p>
-        ${field('fXimenaDecision','Decision',c.ximenaDecision,'Yes / No / Maybe')}
-        <label>Feedback</label>
+        <div class="row2">
+          <div>
+            <label>Decision</label>
+            <select id="fXimenaDecision">${decisionOptions(c.ximenaDecision)}</select>
+          </div>
+          <div>${field('fXimenaComp','Compensation',c.ximenaComp,'$')}</div>
+        </div>
+        <div class="row2">
+          <div>${field('fXimenaInterviewDate','Fecha entrevista',c.ximenaInterviewDate,'','date')}</div>
+          <div>${field('fXimenaNoteDate','Fecha nota',c.ximenaNoteDate,'','date')}</div>
+        </div>
+        <label>Comentario</label>
         <textarea id="fXimenaFeedback" placeholder="Comentarios de Ximena">${escapeHtml(c.ximenaFeedback)}</textarea>
       </div>
 
-      <div class="section">
-        <p class="section-title">Referencias</p>
-        ${field('fRef1','Referencia 1',c.ref1,'Nombre y contacto')}
-        ${field('fRef2','Referencia 2',c.ref2,'Nombre y contacto')}
+      <div class="eval-card" style="border-left-color:#1D9E75">
+        <div class="eval-header">
+          <span class="eval-avatar" style="background:#1D9E75">M</span>
+          <span class="eval-name">Memo</span>
+        </div>
+        <label>Decision</label>
+        <select id="fMemoDecision">${decisionOptions(c.memoDecision)}</select>
+        <div class="row2">
+          <div>${field('fMemoInterviewDate','Fecha entrevista',c.memoInterviewDate,'','date')}</div>
+          <div>${field('fMemoNoteDate','Fecha nota',c.memoNoteDate,'','date')}</div>
+        </div>
+        <label>Comentario</label>
+        <textarea id="fMemoFeedback" placeholder="Comentarios de Memo">${escapeHtml(c.memoFeedback)}</textarea>
       </div>
 
-      <div class="section">
-        <p class="section-title">Comentarios del equipo</p>
-        <div id="commentsList" style="display:flex; flex-direction:column; gap:8px; margin:8px 0; max-height:180px; overflow-y:auto">
-          ${(c.comments||[]).map(cm=>`
-            <div class="comment">
-              <p style="font-size:13px">${escapeHtml(cm.text)}</p>
-              <p class="meta">${escapeHtml(cm.author||'Equipo')} · ${new Date(cm.at).toLocaleString('es-MX')}</p>
-            </div>`).join('') || '<p style="font-size:13px; color:var(--matcha); margin:0">Sin comentarios todavía.</p>'}
+      <div class="eval-card" style="border-left-color:#7F77DD">
+        <div class="eval-header">
+          <span class="eval-avatar" style="background:#7F77DD">J</span>
+          <span class="eval-name">Jocho</span>
         </div>
-        <div style="display:flex; gap:8px">
-          <input id="fAuthor" type="text" placeholder="Tu nombre" style="width:110px" />
-          <input id="fComment" type="text" placeholder="Agregar comentario" style="flex:1" />
-          <button class="icon-btn" id="btnAddComment" aria-label="Agregar comentario"><i class="ti ti-send"></i></button>
+        <label>Decision</label>
+        <select id="fJochoDecision">${decisionOptions(c.jochoDecision)}</select>
+        <div class="row2">
+          <div>${field('fJochoInterviewDate','Fecha entrevista',c.jochoInterviewDate,'','date')}</div>
+          <div>${field('fJochoNoteDate','Fecha nota',c.jochoNoteDate,'','date')}</div>
         </div>
+        <label>Comentario</label>
+        <textarea id="fJochoFeedback" placeholder="Comentarios de Jocho">${escapeHtml(c.jochoFeedback)}</textarea>
+      </div>
+
+      <div class="section-label">Referencias y comentarios</div>
+      <div class="row2">
+        <div>${field('fRef1','Referencia 1',c.ref1,'Nombre y contacto')}</div>
+        <div>${field('fRef2','Referencia 2',c.ref2,'Nombre y contacto')}</div>
+      </div>
+
+      <label style="margin-top:16px">Comentarios del equipo</label>
+      <div id="commentsList" style="display:flex; flex-direction:column; gap:8px; margin:4px 0 8px; max-height:180px; overflow-y:auto">
+        ${(c.comments||[]).map(cm=>`
+          <div class="comment">
+            <p style="font-size:13px">${escapeHtml(cm.text)}</p>
+            <p class="meta">${escapeHtml(cm.author||'Equipo')} · ${new Date(cm.at).toLocaleString('es-MX')}</p>
+          </div>`).join('') || '<p style="font-size:13px; color:var(--matcha); margin:0">Sin comentarios todavía.</p>'}
+      </div>
+      <div style="display:flex; gap:8px">
+        <input id="fAuthor" type="text" placeholder="Tu nombre" style="width:110px" />
+        <input id="fComment" type="text" placeholder="Agregar comentario" style="flex:1" />
+        <button class="icon-btn" id="btnAddComment" aria-label="Agregar comentario"><i class="ti ti-send"></i></button>
       </div>
 
       <div class="modal-footer">
@@ -392,7 +453,7 @@ function openModal(id){
     if(!isNew){
       const idx = candidates.findIndex(x=>x.id===c.id);
       if(idx>=0) candidates[idx] = c;
-      await saveData();
+      await apiSaveCandidate(c);
     }
     openModal(id || c.id);
   };
@@ -406,25 +467,31 @@ function openModal(id){
     c.startDate = document.getElementById('fStartDate').value;
     c.endDate = document.getElementById('fEndDate').value;
     c.memoDecision = document.getElementById('fMemoDecision').value.trim();
-    c.memoComp = document.getElementById('fMemoComp').value.trim();
+    c.memoInterviewDate = document.getElementById('fMemoInterviewDate').value;
+    c.memoNoteDate = document.getElementById('fMemoNoteDate').value;
     c.memoFeedback = document.getElementById('fMemoFeedback').value.trim();
     c.jochoDecision = document.getElementById('fJochoDecision').value.trim();
+    c.jochoInterviewDate = document.getElementById('fJochoInterviewDate').value;
+    c.jochoNoteDate = document.getElementById('fJochoNoteDate').value;
     c.jochoFeedback = document.getElementById('fJochoFeedback').value.trim();
     c.ximenaDecision = document.getElementById('fXimenaDecision').value.trim();
+    c.ximenaComp = document.getElementById('fXimenaComp').value.trim();
+    c.ximenaInterviewDate = document.getElementById('fXimenaInterviewDate').value;
+    c.ximenaNoteDate = document.getElementById('fXimenaNoteDate').value;
     c.ximenaFeedback = document.getElementById('fXimenaFeedback').value.trim();
     c.ref1 = document.getElementById('fRef1').value.trim();
     c.ref2 = document.getElementById('fRef2').value.trim();
     c.updatedAt = Date.now();
     const idx = candidates.findIndex(x=>x.id===c.id);
     if(idx>=0) candidates[idx] = c; else candidates.push(c);
-    await saveData();
+    await apiSaveCandidate(c);
     closeModal();
     render();
   };
   if(!isNew){
     document.getElementById('btnDelete').onclick = async ()=>{
       candidates = candidates.filter(x=>x.id!==c.id);
-      await saveData();
+      await apiDeleteCandidate(c.id);
       closeModal();
       render();
     };
