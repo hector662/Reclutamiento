@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mercanto · Pipeline de reclutamiento</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css" />
+<style>
+  :root {
+    --olive: #273D37;
+    --mint: #A9FFAE;
+    --spring-wood: #EDFBEE;
+    --purple: #9B99FF;
+    --lilac: #E9DEFC;
+    --cream: #FFF3DE;
+    --earl-gray: #F9FAFC;
+    --matcha: #92939D;
+    --blue-skies: #EAFAFF;
+    --peaches: #FFE2CC;
+    --pinetree: #1B2B26;
+    --text-black: #121212;
+    --text-dark: #323338;
+    --text-blue: #242A42;
+    --white: #FFFFFF;
+    --gray-5: #C2CEDB;
+    --gray-6: #D3DCE6;
+    --gray-7: #E5E9F2;
+    --gray-8: #EFF2F7;
+    --gray-9: #F9FAFC;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--spring-wood);
+    color: var(--text-black);
+  }
+  .topbar-brand {
+    background: var(--olive);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand-mark { display: flex; align-items: center; gap: 10px; }
+  .brand-square { width: 22px; height: 22px; background: var(--mint); border-radius: 4px; flex-shrink: 0; }
+  .brand-name { font-size: 18px; font-weight: 700; color: var(--white); letter-spacing: -0.01em; }
+  .brand-tag { font-size: 12px; color: var(--mint); }
+  .status-banner { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mint); }
+  .dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); }
+
+  .content { padding: 24px; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; color: var(--olive); }
+  .sub { font-size: 13px; color: var(--text-dark); margin: 0 0 20px; }
+
+  .topbar { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
+  input, select, textarea {
+    font-family: inherit; font-size: 14px; border: 1px solid var(--gray-6); border-radius: 8px;
+    padding: 8px 10px; background: var(--white); color: var(--text-black);
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--purple); }
+  #search { flex: 1; min-width: 200px; height: 38px; }
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 500; border: 1px solid var(--olive); border-radius: 8px;
+    background: var(--mint); padding: 9px 16px; cursor: pointer; color: var(--olive);
+  }
+  button:hover { background: #8FF096; }
+  button:active { transform: scale(0.98); }
+  button.ghost { background: var(--white); border-color: var(--gray-6); color: var(--text-dark); }
+  button.ghost:hover { background: var(--gray-9); }
+
+  .view-toggle { display: flex; border: 1px solid var(--olive); border-radius: 8px; overflow: hidden; }
+  .view-toggle button { border: none; border-radius: 0; background: var(--white); color: var(--olive); padding: 8px 12px; }
+  .view-toggle button.active { background: var(--olive); color: var(--mint); }
+  .view-toggle button:hover { background: var(--gray-9); }
+  .view-toggle button.active:hover { background: var(--olive); }
+
+  #list { display: flex; flex-direction: column; gap: 8px; }
+  .list-row { display: flex; align-items: center; gap: 12px; background: var(--white); border: 1px solid var(--gray-7); border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+  .list-row:hover { border-color: var(--gray-5); }
+  .list-name { font-size: 14px; font-weight: 600; margin: 0; }
+  .list-meta { font-size: 12px; color: var(--matcha); margin: 0; }
+  .list-status { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  .list-tags { display: flex; gap: 10px; font-size: 11px; color: var(--matcha); margin-left: auto; flex-shrink: 0; }
+  .empty-state { text-align: center; padding: 2rem; color: var(--matcha); font-size: 14px; }
+
+  #board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; }
+  .col { min-width: 235px; max-width: 235px; flex-shrink: 0; background: var(--white); border: 1px solid var(--gray-7); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .col-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 6px; }
+  .col-title { font-size: 13px; font-weight: 700; }
+  .col-count { font-size: 12px; opacity: 0.7; }
+  .dropzone { display: flex; flex-direction: column; gap: 8px; min-height: 40px; border-radius: 8px; transition: background 0.1s; }
+  .card { background: var(--gray-9); border: 1px solid var(--gray-7); border-radius: 8px; padding: 10px; cursor: grab; }
+  .card:active { cursor: grabbing; }
+  .card-top { display: flex; align-items: center; gap: 8px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--lilac); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; color: var(--text-blue); flex-shrink: 0; }
+  .card-name { font-size: 13px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-meta { font-size: 11px; color: var(--matcha); margin: 0; }
+  .card-tags { display: flex; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--matcha); flex-wrap: wrap; }
+
+  .modal-bg { position: fixed; inset: 0; background: rgba(18,18,18,0.5); display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; overflow-y: auto; z-index: 10; }
+  .modal { background: var(--white); border-radius: 14px; width: 100%; max-width: 540px; padding: 1.25rem; }
+  .modal label { font-size: 13px; color: var(--text-dark); display: block; margin-top: 10px; margin-bottom: 4px; font-weight: 500; }
+  .modal input, .modal select, .modal textarea { width: 100%; }
+  .modal textarea { min-height: 60px; resize: vertical; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .section { border-top: 1px solid var(--gray-7); padding-top: 10px; margin-top: 12px; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--olive); margin: 0 0 2px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; }
+  .modal-title { font-weight: 700; font-size: 17px; margin: 0; color: var(--olive); }
+  .icon-btn { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--gray-9); border-color: var(--gray-6); color: var(--text-dark); }
+  .modal-footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 1.25rem; }
+  .danger { background: var(--peaches); border-color: #E6A87A; color: #7A3B12; }
+  .comment { background: var(--gray-9); border-radius: 8px; padding: 8px 10px; }
+  .comment p { margin: 0; }
+  .comment .meta { font-size: 11px; color: var(--matcha); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar-brand">
+  <div class="brand-mark">
+    <span class="brand-square"></span>
+    <div>
+      <div class="brand-name">mercanto</div>
+      <div class="brand-tag">Reclutamiento</div>
+    </div>
+  </div>
+  <div class="status-banner"><span class="dot-live"></span>En vivo · visible y editable para todo el equipo</div>
+</div>
+
+<div class="content">
+  <h1>Pipeline de talento</h1>
+  <p class="sub">Perfiles, CVs, comentarios y avance del equipo en un solo lugar.</p>
+
+  <div class="topbar">
+    <input id="search" type="text" placeholder="Buscar por nombre" />
+    <div class="view-toggle">
+      <button id="btnViewBoard" class="active"><i class="ti ti-layout-kanban" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Tablero</button>
+      <button id="btnViewList"><i class="ti ti-list" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Lista</button>
+    </div>
+    <button id="btnAdd"><i class="ti ti-plus" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Nuevo candidato</button>
+  </div>
+
+  <div id="board"></div>
+  <div id="list" style="display:none"></div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+const STAGES = [
+  {key:"Postulado", bg:"#EFF2F7", fg:"#323338"},
+  {key:"Entrevista", bg:"#E9DEFC", fg:"#242A42"},
+  {key:"Oferta", bg:"#EAFAFF", fg:"#242A42"},
+  {key:"Contratado", bg:"#A9FFAE", fg:"#273D37"},
+  {key:"Rechazado", bg:"#FFE2CC", fg:"#7A3B12"}
+];
+let candidates = [];
+let dragId = null;
+let viewMode = 'board';
+
+function stageStyle(key){ return STAGES.find(s=>s.key===key) || STAGES[0]; }
+
+function renderList(){
+  const search = (document.getElementById('search').value||'').toLowerCase();
+  const list = document.getElementById('list');
+  const items = candidates.filter(c=> !search || c.name.toLowerCase().includes(search))
+    .sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+
+  if(items.length===0){
+    list.innerHTML = '<div class="empty-state">No hay candidatos que coincidan con la búsqueda.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(c=>{
+    const stage = stageStyle(c.status);
+    return `
+    <div class="list-row" data-id="${c.id}">
+      <div class="avatar">${initials(c.name)}</div>
+      <div style="min-width:0">
+        <p class="list-name">${escapeHtml(c.name)}</p>
+        <p class="list-meta">${c.startDate ? 'Inicio ' + escapeHtml(c.startDate) : 'Sin fecha de inicio'}</p>
+      </div>
+      <span class="list-status" style="background:${stage.bg}; color:${stage.fg}">${stage.key}</span>
+      <div class="list-tags">
+        ${c.linkedin ? `<span><i class="ti ti-brand-linkedin" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Li</span>` : ''}
+        ${c.cv ? `<span><i class="ti ti-file" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>CV</span>` : ''}
+        <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${(c.comments||[]).length}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.list-row').forEach(row=>{
+    row.addEventListener('click', ()=>openModal(row.getAttribute('data-id')));
+  });
+}
+
+function setView(mode){
+  viewMode = mode;
+  const board = document.getElementById('board');
+  const list = document.getElementById('list');
+  const btnBoard = document.getElementById('btnViewBoard');
+  const btnList = document.getElementById('btnViewList');
+  if(mode==='board'){
+    board.style.display = 'flex';
+    list.style.display = 'none';
+    btnBoard.classList.add('active');
+    btnList.classList.remove('active');
+  } else {
+    board.style.display = 'none';
+    list.style.display = 'flex';
+    btnList.classList.add('active');
+    btnBoard.classList.remove('active');
+  }
+  render();
+}
+
+function uid(){ return 'c_'+Date.now()+'_'+Math.random().toString(36).slice(2,7); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
+function blank(){
+  return {id: uid(), name:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'',
+    offerDate:'', startDate:'', endDate:'',
+    memoDecision:'', memoFeedback:'', memoComp:'',
+    jochoDecision:'', jochoFeedback:'',
+    ximenaDecision:'', ximenaFeedback:'',
+    ref1:'', ref2:'', comments:[], updatedAt:Date.now()};
+}
+
+async function loadData(){
+  try{
+    const res = await window.storage.get('candidates_v3', true);
+    candidates = res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){ candidates = []; }
+  render();
+}
+async function saveData(){
+  try{ await window.storage.set('candidates_v3', JSON.stringify(candidates), true); }
+  catch(e){ console.error('Error guardando', e); }
+}
+
+function render(){
+  if(viewMode==='list'){ renderList(); return; }
+  const search = (document.getElementById('search').value||'').toLowerCase();
+  const board = document.getElementById('board');
+  board.innerHTML = STAGES.map(stage=>{
+    const items = candidates.filter(c=>{
+      const matches = !search || c.name.toLowerCase().includes(search);
+      return c.status===stage.key && matches;
+    }).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+    return `
+    <div class="col">
+      <div class="col-header" style="background:${stage.bg}; color:${stage.fg}">
+        <span class="col-title">${stage.key}</span>
+        <span class="col-count">${items.length}</span>
+      </div>
+      <div class="dropzone" data-stage="${escapeHtml(stage.key)}">
+        ${items.map(c=>`
+          <div class="card" draggable="true" data-id="${c.id}">
+            <div class="card-top">
+              <div class="avatar">${initials(c.name)}</div>
+              <div style="min-width:0">
+                <p class="card-name">${escapeHtml(c.name)}</p>
+                ${c.startDate ? `<p class="card-meta">Inicio ${escapeHtml(c.startDate)}</p>` : ''}
+              </div>
+            </div>
+            <div class="card-tags">
+              ${c.linkedin ? `<span><i class="ti ti-brand-linkedin" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Li</span>` : ''}
+              ${c.cv ? `<span><i class="ti ti-file" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>CV</span>` : ''}
+              <span><i class="ti ti-message-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>${(c.comments||[]).length}</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  board.querySelectorAll('.card').forEach(card=>{
+    card.addEventListener('click', ()=>openModal(card.getAttribute('data-id')));
+    card.addEventListener('dragstart', e=>{ dragId = card.getAttribute('data-id'); e.dataTransfer.effectAllowed='move'; });
+  });
+  board.querySelectorAll('.dropzone').forEach(zone=>{
+    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.style.background='#EAFAFF'; });
+    zone.addEventListener('dragleave', ()=>{ zone.style.background=''; });
+    zone.addEventListener('drop', async e=>{
+      e.preventDefault();
+      zone.style.background='';
+      const stage = zone.getAttribute('data-stage');
+      const c = candidates.find(x=>x.id===dragId);
+      if(c && c.status!==stage){
+        c.status = stage;
+        c.updatedAt = Date.now();
+        await saveData();
+        render();
+      }
+    });
+  });
+}
+
+function field(id, label, value, placeholder, type){
+  type = type || 'text';
+  return `<label>${label}</label><input id="${id}" type="${type}" value="${escapeHtml(value)}" placeholder="${placeholder||''}" />`;
+}
+
+function openModal(id){
+  const isNew = !id;
+  const c = id ? candidates.find(x=>x.id===id) : blank();
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="modal-bg">
+    <div class="modal">
+      <div class="modal-header">
+        <p class="modal-title">${isNew ? 'Nuevo candidato' : 'Editar candidato'}</p>
+        <button class="icon-btn" id="btnClose" aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      </div>
+
+      ${field('fName','Nombre',c.name,'Nombre del candidato')}
+      ${field('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...')}
+      <label>Status</label>
+      <select id="fStatus">
+        ${STAGES.map(s=>`<option value="${s.key}" ${s.key===c.status?'selected':''}>${s.key}</option>`).join('')}
+      </select>
+      ${field('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...')}
+      ${field('fCv','CV (link)',c.cv,'https://drive.google.com/...')}
+
+      <div class="row2">
+        ${field('fOfferDate','Offer date',c.offerDate,'','date')}
+        ${field('fStartDate','Start date',c.startDate,'','date')}
+      </div>
+      ${field('fEndDate','Fecha de salida',c.endDate,'','date')}
+
+      <div class="section">
+        <p class="section-title">Memo</p>
+        <div class="row2">
+          ${field('fMemoDecision','Decision',c.memoDecision,'Yes / No / Maybe')}
+          ${field('fMemoComp','Compensation',c.memoComp,'$')}
+        </div>
+        <label>Feedback</label>
+        <textarea id="fMemoFeedback" placeholder="Comentarios de Memo">${escapeHtml(c.memoFeedback)}</textarea>
+      </div>
+
+      <div class="section">
+        <p class="section-title">Jocho</p>
+        ${field('fJochoDecision','Decision',c.jochoDecision,'Yes / No / Maybe')}
+        <label>Feedback</label>
+        <textarea id="fJochoFeedback" placeholder="Comentarios de Jocho">${escapeHtml(c.jochoFeedback)}</textarea>
+      </div>
+
+      <div class="section">
+        <p class="section-title">Ximena (Líder de RH)</p>
+        ${field('fXimenaDecision','Decision',c.ximenaDecision,'Yes / No / Maybe')}
+        <label>Feedback</label>
+        <textarea id="fXimenaFeedback" placeholder="Comentarios de Ximena">${escapeHtml(c.ximenaFeedback)}</textarea>
+      </div>
+
+      <div class="section">
+        <p class="section-title">Referencias</p>
+        ${field('fRef1','Referencia 1',c.ref1,'Nombre y contacto')}
+        ${field('fRef2','Referencia 2',c.ref2,'Nombre y contacto')}
+      </div>
+
+      <div class="section">
+        <p class="section-title">Comentarios del equipo</p>
+        <div id="commentsList" style="display:flex; flex-direction:column; gap:8px; margin:8px 0; max-height:180px; overflow-y:auto">
+          ${(c.comments||[]).map(cm=>`
+            <div class="comment">
+              <p style="font-size:13px">${escapeHtml(cm.text)}</p>
+              <p class="meta">${escapeHtml(cm.author||'Equipo')} · ${new Date(cm.at).toLocaleString('es-MX')}</p>
+            </div>`).join('') || '<p style="font-size:13px; color:var(--matcha); margin:0">Sin comentarios todavía.</p>'}
+        </div>
+        <div style="display:flex; gap:8px">
+          <input id="fAuthor" type="text" placeholder="Tu nombre" style="width:110px" />
+          <input id="fComment" type="text" placeholder="Agregar comentario" style="flex:1" />
+          <button class="icon-btn" id="btnAddComment" aria-label="Agregar comentario"><i class="ti ti-send"></i></button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btnDelete" class="danger">${isNew ? '' : '<i class="ti ti-trash" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Eliminar'}</button>
+        <button id="btnSave"><i class="ti ti-check" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Guardar</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.getElementById('btnClose').onclick = closeModal;
+  document.getElementById('btnAddComment').onclick = async ()=>{
+    const text = document.getElementById('fComment').value.trim();
+    if(!text) return;
+    const author = document.getElementById('fAuthor').value.trim() || 'Equipo';
+    c.comments = c.comments || [];
+    c.comments.push({text, author, at: Date.now()});
+    if(!isNew){
+      const idx = candidates.findIndex(x=>x.id===c.id);
+      if(idx>=0) candidates[idx] = c;
+      await saveData();
+    }
+    openModal(id || c.id);
+  };
+  document.getElementById('btnSave').onclick = async ()=>{
+    c.name = document.getElementById('fName').value.trim() || 'Sin nombre';
+    c.linkedin = document.getElementById('fLinkedin').value.trim();
+    c.status = document.getElementById('fStatus').value;
+    c.interviewLink = document.getElementById('fInterviewLink').value.trim();
+    c.cv = document.getElementById('fCv').value.trim();
+    c.offerDate = document.getElementById('fOfferDate').value;
+    c.startDate = document.getElementById('fStartDate').value;
+    c.endDate = document.getElementById('fEndDate').value;
+    c.memoDecision = document.getElementById('fMemoDecision').value.trim();
+    c.memoComp = document.getElementById('fMemoComp').value.trim();
+    c.memoFeedback = document.getElementById('fMemoFeedback').value.trim();
+    c.jochoDecision = document.getElementById('fJochoDecision').value.trim();
+    c.jochoFeedback = document.getElementById('fJochoFeedback').value.trim();
+    c.ximenaDecision = document.getElementById('fXimenaDecision').value.trim();
+    c.ximenaFeedback = document.getElementById('fXimenaFeedback').value.trim();
+    c.ref1 = document.getElementById('fRef1').value.trim();
+    c.ref2 = document.getElementById('fRef2').value.trim();
+    c.updatedAt = Date.now();
+    const idx = candidates.findIndex(x=>x.id===c.id);
+    if(idx>=0) candidates[idx] = c; else candidates.push(c);
+    await saveData();
+    closeModal();
+    render();
+  };
+  if(!isNew){
+    document.getElementById('btnDelete').onclick = async ()=>{
+      candidates = candidates.filter(x=>x.id!==c.id);
+      await saveData();
+      closeModal();
+      render();
+    };
+  }
+}
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+document.getElementById('btnAdd').addEventListener('click', ()=>openModal(null));
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('btnViewBoard').addEventListener('click', ()=>setView('board'));
+document.getElementById('btnViewList').addEventListener('click', ()=>setView('list'));
+
+loadData();
+</script>
+</body>
+</html>
