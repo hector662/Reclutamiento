@@ -175,6 +175,16 @@
   .crit-bar { flex: 1; height: 8px; background: var(--gray-7); border-radius: 999px; overflow: hidden; }
   .crit-fill { display: block; height: 100%; background: var(--olive); border-radius: 999px; }
   .crit-val { font-size: 12px; font-weight: 700; color: var(--olive); width: 28px; text-align: right; flex-shrink: 0; }
+
+  .mini-link { font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--olive); background: var(--mint); border: 1px solid var(--olive); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+  .mini-link:hover { background: #8FF096; }
+  .guide-crit { border: 1px solid var(--gray-7); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--gray-9); }
+  .guide-crit-title { font-size: 14px; font-weight: 700; color: var(--olive); margin-bottom: 8px; }
+  .guide-level { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; }
+  .guide-level + .guide-level { border-top: 1px solid var(--gray-7); }
+  .guide-stars { font-size: 15px; white-space: nowrap; color: #F5B301; flex-shrink: 0; letter-spacing: 1px; }
+  .guide-stars-off { color: var(--gray-6); }
+  .guide-text { font-size: 13px; color: var(--text-dark); line-height: 1.45; }
 </style>
 </head>
 <body>
@@ -212,6 +222,7 @@
       <button id="btnViewBoard" class="active"><i class="ti ti-layout-kanban" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Tablero</button>
       <button id="btnViewList"><i class="ti ti-list" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Lista</button>
     </div>
+    <button id="btnGuide" class="ghost" title="Cómo calificar cada estrella"><i class="ti ti-help-circle" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Guía de calificación</button>
     <button id="btnAdd"><i class="ti ti-plus" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Nuevo candidato</button>
   </div>
   <p id="filterCount" class="filter-count"></p>
@@ -221,6 +232,7 @@
 </div>
 
 <div id="modalRoot"></div>
+<div id="guideRoot"></div>
 
 <script>
 const STAGES = [
@@ -387,6 +399,54 @@ const EVALUATORS = [
   {key:'jocho',  label:'Jocho',  color:'#7F77DD'}
 ];
 function rubKey(evalKey, critKey){ return evalKey + 'Rub' + critKey; }
+
+const GUIDE = [
+  {crit:'Cultura', levels:[
+    {n:1, text:'No sabe qué busca o solo habla de sueldo.'},
+    {n:3, text:'Tiene interés por aprender pero respuestas genéricas.'},
+    {n:5, text:'Busca retos, acepta feedback y habla de crecimiento.'}
+  ]},
+  {crit:'Experiencia', levels:[
+    {n:1, text:'Nunca tomó iniciativa.'},
+    {n:3, text:'Participó en proyectos universitarios.'},
+    {n:5, text:'Lideró proyectos, emprendió, vendió algo o logró resultados aunque no fuera un empleo.'}
+  ]},
+  {crit:'Comunicación', levels:[
+    {n:1, text:'Se pierde al explicar.'},
+    {n:3, text:'Se entiende pero le falta estructura.'},
+    {n:5, text:'Es claro, ordenado y transmite ideas con seguridad.'}
+  ]},
+  {crit:'Potencial', levels:[
+    {n:1, text:'Culpa a otros y no aprende.'},
+    {n:3, text:'Reconoce errores.'},
+    {n:5, text:'Aprende rápido, toma acción y demuestra curiosidad.'}
+  ]}
+];
+function openGuide(){
+  const root = document.getElementById('guideRoot');
+  root.innerHTML = `
+  <div class="modal-bg" style="z-index:20" id="guideBg">
+    <div class="modal" style="max-width:600px">
+      <div class="modal-header">
+        <p class="modal-title"><i class="ti ti-star" style="font-size:18px;vertical-align:-2px;margin-right:4px"></i>Guía de calificación</p>
+        <button class="icon-btn" id="btnCloseGuide" aria-label="Cerrar" style="font-size:18px; line-height:1">&times;</button>
+      </div>
+      <p style="font-size:13px; color:var(--text-dark); margin:4px 0 14px">Referencia para calificar cada criterio de 1 a 5 estrellas. El nivel 3 es el punto medio.</p>
+      ${GUIDE.map(g=>`
+        <div class="guide-crit">
+          <div class="guide-crit-title">${g.crit}</div>
+          ${g.levels.map(l=>`
+            <div class="guide-level">
+              <span class="guide-stars">${'★'.repeat(l.n)}<span class="guide-stars-off">${'★'.repeat(5-l.n)}</span></span>
+              <span class="guide-text">${l.text}</span>
+            </div>`).join('')}
+        </div>`).join('')}
+    </div>
+  </div>`;
+  document.getElementById('btnCloseGuide').onclick = closeGuide;
+  document.getElementById('guideBg').addEventListener('click', e=>{ if(e.target.id==='guideBg') closeGuide(); });
+}
+function closeGuide(){ document.getElementById('guideRoot').innerHTML=''; }
 
 // Score de un evaluador: promedio de los criterios que calificó (x20), o null
 function evalRubricScore(c, evalKey){
@@ -822,7 +882,7 @@ function openModal(id){
       </div>
       ${field('fEndDate','Fecha de salida',c.endDate,'','date')}
 
-      <div class="section-label">Evaluaciones del panel</div>
+      <div class="section-label">Evaluaciones del panel <button type="button" class="mini-link" onclick="openGuide()"><i class="ti ti-help-circle" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>¿Cómo calificar?</button></div>
 
       <div class="eval-card" style="border-left-color:#D85A30">
         <div class="eval-header">
@@ -982,6 +1042,7 @@ function openModalComments(id){
 }
 
 document.getElementById('btnAdd').addEventListener('click', ()=>openModal(null));
+document.getElementById('btnGuide').addEventListener('click', openGuide);
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('filterRole').addEventListener('change', render);
 document.getElementById('filterStage').addEventListener('change', render);
