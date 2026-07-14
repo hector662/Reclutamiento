@@ -163,6 +163,18 @@
   .star.on { color: #F5B301; }
   .rub-score { font-size: 12px; color: var(--matcha); margin: 8px 0 0; text-align: right; }
   .rub-score b { color: var(--olive); font-size: 14px; }
+
+  .final-panel { background: var(--white); border: 1px solid var(--gray-7); border-radius: 12px; padding: 14px 16px; }
+  .final-head { display: flex; align-items: center; gap: 14px; }
+  .final-score { font-size: 30px; font-weight: 800; padding: 6px 14px; border-radius: 12px; line-height: 1; flex-shrink: 0; }
+  .final-title { font-size: 14px; font-weight: 700; color: var(--text-black); }
+  .final-sub { font-size: 12px; color: var(--matcha); margin-top: 2px; }
+  .crit-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .crit-row { display: flex; align-items: center; gap: 10px; }
+  .crit-name { font-size: 12px; font-weight: 600; color: var(--text-dark); width: 92px; flex-shrink: 0; }
+  .crit-bar { flex: 1; height: 8px; background: var(--gray-7); border-radius: 999px; overflow: hidden; }
+  .crit-fill { display: block; height: 100%; background: var(--olive); border-radius: 999px; }
+  .crit-val { font-size: 12px; font-weight: 700; color: var(--olive); width: 28px; text-align: right; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -236,7 +248,7 @@ function renderList(){
 
   list.innerHTML = items.map(c=>{
     const stage = stageStyle(c.status);
-    const rs = rubricScore(c);
+    const rs = finalScore(c);
     return `
     <div class="list-row" data-id="${c.id}">
       <div class="avatar">${initials(c.name)}</div>
@@ -244,7 +256,7 @@ function renderList(){
         <p class="list-name">${escapeHtml(c.name)}</p>
         <p class="list-meta">${c.startDate ? 'Inicio ' + escapeHtml(c.startDate) : 'Sin fecha de inicio'}</p>
       </div>
-      ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Score de rúbrica · ${rs.filled} de 4 criterios">${rs.score}</span>` : ''}
+      ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Resultado final · ${rs.evaluators} de 3 evaluadores">${rs.score}</span>` : ''}
       <span class="list-status" style="background:${stage.bg}; color:${stage.fg}">${stage.key}</span>
       <div class="list-tags">
         ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
@@ -363,17 +375,38 @@ function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<
 function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
 const ROLES = ['Sales Lead', 'KAM', 'BDR', 'Otro'];
 
-const RUBRIC = [
-  {key:'rubricCultura',     label:'Cultura'},
-  {key:'rubricExperiencia', label:'Experiencia'},
-  {key:'rubricComunicacion',label:'Comunicación'},
-  {key:'rubricPotencial',   label:'Potencial'}
+const CRITERIA = [
+  {key:'Cultura',      label:'Cultura'},
+  {key:'Experiencia',  label:'Experiencia'},
+  {key:'Comunicacion', label:'Comunicación'},
+  {key:'Potencial',    label:'Potencial'}
 ];
-function rubricScore(c){
-  const vals = RUBRIC.map(r=>Number(c[r.key])||0).filter(v=>v>0);
+const EVALUATORS = [
+  {key:'ximena', label:'Ximena', color:'#D85A30'},
+  {key:'memo',   label:'Memo',   color:'#1D9E75'},
+  {key:'jocho',  label:'Jocho',  color:'#7F77DD'}
+];
+function rubKey(evalKey, critKey){ return evalKey + 'Rub' + critKey; }
+
+// Score de un evaluador: promedio de los criterios que calificó (x20), o null
+function evalRubricScore(c, evalKey){
+  const vals = CRITERIA.map(cr=>Number(c[rubKey(evalKey, cr.key)])||0).filter(v=>v>0);
   if(!vals.length) return null;
   const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
   return { score: Math.round(avg*20), filled: vals.length, avg };
+}
+// Promedio de un criterio entre los evaluadores que lo calificaron (1..5), o null
+function criterionAvg(c, critKey){
+  const vals = EVALUATORS.map(e=>Number(c[rubKey(e.key, critKey)])||0).filter(v=>v>0);
+  if(!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+// Resultado final: promedio de los scores de los evaluadores que calificaron (0..100), o null
+function finalScore(c){
+  const scores = EVALUATORS.map(e=>evalRubricScore(c, e.key)).filter(Boolean);
+  if(!scores.length) return null;
+  const avg = scores.reduce((a,b)=>a+b.score,0)/scores.length;
+  return { score: Math.round(avg), evaluators: scores.length };
 }
 function scoreColor(s){
   if(s>=80) return {fg:'#0F6E56', bg:'#E1F5EE'};
@@ -383,11 +416,47 @@ function scoreColor(s){
 let sortMode = 'recent';
 function sortComparator(a,b){
   if(sortMode==='score'){
-    const sa = (rubricScore(a)||{score:-1}).score;
-    const sb = (rubricScore(b)||{score:-1}).score;
+    const sa = (finalScore(a)||{score:-1}).score;
+    const sb = (finalScore(b)||{score:-1}).score;
     if(sb!==sa) return sb-sa;
   }
   return (b.updatedAt||0)-(a.updatedAt||0);
+}
+// Bloque de estrellas de rúbrica para un evaluador (dentro de su tarjeta en el modal)
+function evalRubricInputs(c, evalKey){
+  return `<label>Calificación (rúbrica)</label>
+  <div class="rubric">
+    ${CRITERIA.map(cr=>`
+      <div class="rub-row">
+        <span class="rub-label">${cr.label}</span>
+        ${starRating('fld_'+rubKey(evalKey, cr.key), c[rubKey(evalKey, cr.key)])}
+      </div>`).join('')}
+  </div>
+  <p class="rub-score" id="score_${evalKey}"></p>`;
+}
+// Panel de resultado final consolidado (solo lectura, calculado)
+function renderFinalResult(c){
+  const fs = finalScore(c);
+  if(!fs) return '<p class="rub-score" style="text-align:left">Aún no hay calificaciones del panel. Cada evaluador califica en su sección de arriba.</p>';
+  const col = scoreColor(fs.score);
+  const crits = CRITERIA.map(cr=>{
+    const a = criterionAvg(c, cr.key);
+    const pct = a ? (a/5*100) : 0;
+    return `<div class="crit-row">
+      <span class="crit-name">${cr.label}</span>
+      <span class="crit-bar"><span class="crit-fill" style="width:${pct}%"></span></span>
+      <span class="crit-val">${a ? a.toFixed(1) : '—'}</span>
+    </div>`;
+  }).join('');
+  return `
+    <div class="final-head">
+      <span class="final-score" style="background:${col.bg}; color:${col.fg}">${fs.score}<span style="font-size:12px;font-weight:600">/100</span></span>
+      <div>
+        <div class="final-title">Resultado final del panel</div>
+        <div class="final-sub">${fs.evaluators} de 3 evaluadores calificaron · promedio de sus scores</div>
+      </div>
+    </div>
+    <div class="crit-list">${crits}</div>`;
 }
 function paintStars(id, upto){
   const input = document.getElementById(id);
@@ -404,12 +473,19 @@ function setStar(id, v){
   updateRubScore();
 }
 function updateRubScore(){
-  const el = document.getElementById('rubScoreLive');
-  if(!el) return;
   const tmp = {};
-  RUBRIC.forEach(r=>{ const inp = document.getElementById('fld_'+r.key); tmp[r.key] = inp ? inp.value : ''; });
-  const rs = rubricScore(tmp);
-  el.innerHTML = rs ? `Score: <b>${rs.score}/100</b> · ${rs.filled} de 4 criterios` : 'Sin calificar todavía';
+  EVALUATORS.forEach(e=>CRITERIA.forEach(cr=>{
+    const inp = document.getElementById('fld_'+rubKey(e.key, cr.key));
+    if(inp) tmp[rubKey(e.key, cr.key)] = inp.value;
+  }));
+  EVALUATORS.forEach(e=>{
+    const el = document.getElementById('score_'+e.key);
+    if(!el) return;
+    const s = evalRubricScore(tmp, e.key);
+    el.innerHTML = s ? `Score de ${e.label}: <b>${s.score}/100</b> · ${s.filled}/4 criterios` : 'Sin calificar';
+  });
+  const fEl = document.getElementById('finalResult');
+  if(fEl) fEl.innerHTML = renderFinalResult(tmp);
 }
 function hoverStar(id, v){
   const input = document.getElementById(id);
@@ -431,7 +507,9 @@ function blank(){
     memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
     jochoDecision:'', jochoFeedback:'', jochoInterviewDate:'', jochoNoteDate:'',
     ximenaDecision:'', ximenaFeedback:'', ximenaComp:'', ximenaInterviewDate:'', ximenaNoteDate:'',
-    rubricCultura:'', rubricExperiencia:'', rubricComunicacion:'', rubricPotencial:'',
+    ximenaRubCultura:'', ximenaRubExperiencia:'', ximenaRubComunicacion:'', ximenaRubPotencial:'',
+    memoRubCultura:'', memoRubExperiencia:'', memoRubComunicacion:'', memoRubPotencial:'',
+    jochoRubCultura:'', jochoRubExperiencia:'', jochoRubComunicacion:'', jochoRubPotencial:'',
     ref1:'', ref2:'', comments:[], updatedAt:Date.now()};
 }
 
@@ -600,7 +678,7 @@ function render(){
           const d = stageDays(c);
           const stale = isStale(c);
           const sd = stageDate(c);
-          const rs = rubricScore(c);
+          const rs = finalScore(c);
           return `
           <div class="card ${stale?'stale':''}" draggable="true" data-id="${c.id}">
             <div class="card-top">
@@ -609,7 +687,7 @@ function render(){
                 <p class="card-name">${escapeHtml(c.name)}</p>
                 ${c.role ? `<span class="card-role">${escapeHtml(c.role)}</span>` : ''}
               </div>
-              ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Score de rúbrica · ${rs.filled} de 4 criterios">${rs.score}</span>` : ''}
+              ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Resultado final · ${rs.evaluators} de 3 evaluadores">${rs.score}</span>` : ''}
             </div>
             <div style="margin-top:8px">
               <span class="panel-chip" style="background:${p.bg}; color:${p.color}">${p.icon ? `<i class="ti ${p.icon}" style="font-size:12px;vertical-align:-1px;margin-right:3px"></i>` : ''}${p.label}</span>
@@ -762,6 +840,7 @@ function openModal(id){
           <div>${field('fXimenaInterviewDate','Fecha entrevista',c.ximenaInterviewDate,'','date')}</div>
           <div>${field('fXimenaNoteDate','Fecha nota',c.ximenaNoteDate,'','date')}</div>
         </div>
+        ${evalRubricInputs(c, 'ximena')}
         <label>Comentario</label>
         <textarea id="fXimenaFeedback" placeholder="Comentarios de Ximena">${escapeHtml(c.ximenaFeedback)}</textarea>
       </div>
@@ -777,6 +856,7 @@ function openModal(id){
           <div>${field('fMemoInterviewDate','Fecha entrevista',c.memoInterviewDate,'','date')}</div>
           <div>${field('fMemoNoteDate','Fecha nota',c.memoNoteDate,'','date')}</div>
         </div>
+        ${evalRubricInputs(c, 'memo')}
         <label>Comentario</label>
         <textarea id="fMemoFeedback" placeholder="Comentarios de Memo">${escapeHtml(c.memoFeedback)}</textarea>
       </div>
@@ -792,19 +872,13 @@ function openModal(id){
           <div>${field('fJochoInterviewDate','Fecha entrevista',c.jochoInterviewDate,'','date')}</div>
           <div>${field('fJochoNoteDate','Fecha nota',c.jochoNoteDate,'','date')}</div>
         </div>
+        ${evalRubricInputs(c, 'jocho')}
         <label>Comentario</label>
         <textarea id="fJochoFeedback" placeholder="Comentarios de Jocho">${escapeHtml(c.jochoFeedback)}</textarea>
       </div>
 
-      <div class="section-label">Calificación del candidato</div>
-      <div class="rubric">
-        ${RUBRIC.map(r=>`
-          <div class="rub-row">
-            <span class="rub-label">${r.label}</span>
-            ${starRating('fld_'+r.key, c[r.key])}
-          </div>`).join('')}
-      </div>
-      <p class="rub-score" id="rubScoreLive"></p>
+      <div class="section-label">Resultado final del panel</div>
+      <div id="finalResult" class="final-panel"></div>
 
       <div class="section-label">Referencias y comentarios</div>
       <div class="row2">
@@ -878,7 +952,10 @@ function openModal(id){
     c.ximenaFeedback = document.getElementById('fXimenaFeedback').value.trim();
     c.ref1 = document.getElementById('fRef1').value.trim();
     c.ref2 = document.getElementById('fRef2').value.trim();
-    RUBRIC.forEach(r=>{ c[r.key] = document.getElementById('fld_'+r.key).value; });
+    EVALUATORS.forEach(e=>CRITERIA.forEach(cr=>{
+      const el = document.getElementById('fld_'+rubKey(e.key, cr.key));
+      if(el) c[rubKey(e.key, cr.key)] = el.value;
+    }));
     c.updatedAt = Date.now();
     const idx = candidates.findIndex(x=>x.id===c.id);
     if(idx>=0) candidates[idx] = c; else candidates.push(c);
