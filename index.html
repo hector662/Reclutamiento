@@ -118,6 +118,7 @@
   .metric.alert { border-color: #F0997B; background: #FFF7F3; }
   .metric.alert .metric-value { color: #993C1D; }
 
+  .card.dragging { opacity: 0.4; }
   .card.stale { border-color: #F0997B; background: #FFF7F3; }
   .card-role { font-size: 11px; color: var(--text-blue); background: var(--lilac); padding: 2px 7px; border-radius: 999px; display: inline-block; font-weight: 600; }
   .filter-count { font-size: 12px; color: var(--matcha); margin: -8px 0 14px; display: none; }
@@ -215,6 +216,7 @@
     <button id="btnStale" class="ghost" title="Solo candidatos estancados"><i class="ti ti-alert-triangle" style="font-size:15px;vertical-align:-2px;margin-right:4px"></i>Estancados</button>
     <button id="btnClearFilters" class="ghost" title="Limpiar filtros"><i class="ti ti-x" style="font-size:15px;vertical-align:-2px"></i></button>
     <select id="sortBy" style="width:160px" title="Ordenar candidatos">
+      <option value="manual">Orden: mi orden</option>
       <option value="recent">Orden: reciente</option>
       <option value="score">Orden: mejor score</option>
     </select>
@@ -244,6 +246,7 @@ const STAGES = [
 ];
 let candidates = [];
 let dragId = null;
+let dragDropped = false;
 let viewMode = 'board';
 
 function stageStyle(key){ return STAGES.find(s=>s.key===key) || STAGES[0]; }
@@ -473,12 +476,18 @@ function scoreColor(s){
   if(s>=60) return {fg:'#854F0B', bg:'#FAEEDA'};
   return {fg:'#993C1D', bg:'#FAECE7'};
 }
-let sortMode = 'recent';
+let sortMode = 'manual';
+function orderVal(c){
+  return (typeof c.order === 'number' && isFinite(c.order)) ? c.order : (Number(c.updatedAt) || 0);
+}
 function sortComparator(a,b){
   if(sortMode==='score'){
     const sa = (finalScore(a)||{score:-1}).score;
     const sb = (finalScore(b)||{score:-1}).score;
     if(sb!==sa) return sb-sa;
+  }
+  if(sortMode==='manual'){
+    return orderVal(b) - orderVal(a); // mayor arriba; por defecto = más reciente arriba
   }
   return (b.updatedAt||0)-(a.updatedAt||0);
 }
@@ -774,25 +783,72 @@ function render(){
 
   board.querySelectorAll('.card').forEach(card=>{
     card.addEventListener('click', ()=>openModal(card.getAttribute('data-id')));
-    card.addEventListener('dragstart', e=>{ dragId = card.getAttribute('data-id'); e.dataTransfer.effectAllowed='move'; });
-  });
-  board.querySelectorAll('.dropzone').forEach(zone=>{
-    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.style.background='#EAFAFF'; });
-    zone.addEventListener('dragleave', ()=>{ zone.style.background=''; });
-    zone.addEventListener('drop', async e=>{
-      e.preventDefault();
-      zone.style.background='';
-      const stage = zone.getAttribute('data-stage');
-      const c = candidates.find(x=>x.id===dragId);
-      if(c && c.status!==stage){
-        c.status = stage;
-        c.statusChangedAt = Date.now();
-        c.updatedAt = Date.now();
-        await apiSaveCandidate(c);
-        render();
-      }
+    card.addEventListener('dragstart', e=>{
+      dragId = card.getAttribute('data-id');
+      dragDropped = false;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(()=>card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', ()=>{
+      card.classList.remove('dragging');
+      if(!dragDropped) render(); // se soltó fuera de una columna: restaurar
     });
   });
+  board.querySelectorAll('.dropzone').forEach(zone=>{
+    zone.addEventListener('dragover', e=>{
+      e.preventDefault();
+      const draggingEl = board.querySelector('.card.dragging');
+      if(!draggingEl) return;
+      const after = getDragAfterElement(zone, e.clientY);
+      if(after == null) zone.appendChild(draggingEl);
+      else zone.insertBefore(draggingEl, after);
+    });
+    zone.addEventListener('drop', async e=>{
+      e.preventDefault();
+      dragDropped = true;
+      const stage = zone.getAttribute('data-stage');
+      const c = candidates.find(x=>x.id===dragId);
+      if(!c){ render(); return; }
+      const changedStatus = c.status !== stage;
+      // En modos ordenados (score/reciente) el reordenamiento vertical no aplica
+      if(!changedStatus && sortMode !== 'manual'){ render(); return; }
+      // Vecinos según la posición final del card arrastrado dentro de la columna
+      const draggingEl = zone.querySelector('.card.dragging');
+      const upperId = prevCardId(draggingEl);
+      const lowerId = nextCardId(draggingEl);
+      const upper = upperId ? candidates.find(x=>x.id===upperId) : null;
+      const lower = lowerId ? candidates.find(x=>x.id===lowerId) : null;
+      const STEP = 1e9;
+      if(upper && lower)      c.order = (orderVal(upper) + orderVal(lower)) / 2;
+      else if(lower)          c.order = orderVal(lower) + STEP; // arriba del todo
+      else if(upper)          c.order = orderVal(upper) - STEP; // hasta abajo
+      else                    c.order = Date.now();            // columna vacía
+      if(changedStatus){ c.status = stage; c.statusChangedAt = Date.now(); }
+      c.updatedAt = Date.now();
+      render();                 // refleja el nuevo orden al instante
+      await apiSaveCandidate(c); // persiste solo el card movido
+    });
+  });
+}
+function prevCardId(el){
+  let p = el ? el.previousElementSibling : null;
+  while(p && !p.classList.contains('card')) p = p.previousElementSibling;
+  return p ? p.getAttribute('data-id') : null;
+}
+function nextCardId(el){
+  let n = el ? el.nextElementSibling : null;
+  while(n && !n.classList.contains('card')) n = n.nextElementSibling;
+  return n ? n.getAttribute('data-id') : null;
+}
+function getDragAfterElement(zone, y){
+  const els = [...zone.querySelectorAll('.card:not(.dragging)')];
+  let closest = null, closestOffset = Number.NEGATIVE_INFINITY;
+  for(const child of els){
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if(offset < 0 && offset > closestOffset){ closestOffset = offset; closest = child; }
+  }
+  return closest;
 }
 
 function field(id, label, value, placeholder, type){
