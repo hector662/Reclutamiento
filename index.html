@@ -120,6 +120,8 @@
 
   .card.dragging { opacity: 0.4; }
   .card.stale { border-color: #F0997B; background: #FFF7F3; }
+  .card-badges { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-top: 3px; }
+  .card-status { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; display: inline-block; }
   .card-role { font-size: 11px; color: var(--text-blue); background: var(--lilac); padding: 2px 7px; border-radius: 999px; display: inline-block; font-weight: 600; }
   .filter-count { font-size: 12px; color: var(--matcha); margin: -8px 0 14px; display: none; }
   button.active-filter { background: var(--olive); color: var(--mint); border-color: var(--olive); }
@@ -244,6 +246,19 @@ const STAGES = [
   {key:"Contratado", bg:"#A9FFAE", fg:"#273D37"},
   {key:"Rechazado", bg:"#FFE2CC", fg:"#7A3B12"}
 ];
+// Columnas del tablero: por ASIGNACIÓN (quién es dueño), con Postulado y Rechazado por status
+const COLUMNS = [
+  {key:"Postulado", type:"status", title:"Postulado", bg:"#EFF2F7", fg:"#323338"},
+  {key:"ximena",    type:"assign", title:"Ximena",    bg:"#FBE7DE", fg:"#B0421B"},
+  {key:"memo",      type:"assign", title:"Memo",      bg:"#DFF3EA", fg:"#0F6E56"},
+  {key:"jocho",     type:"assign", title:"Jocho",     bg:"#E7E5FB", fg:"#4B44B5"},
+  {key:"Rechazado", type:"status", title:"Rechazado", bg:"#FFE2CC", fg:"#7A3B12"}
+];
+function columnOf(c){
+  if(c.status === 'Rechazado') return 'Rechazado';
+  if(c.assignment === 'ximena' || c.assignment === 'memo' || c.assignment === 'jocho') return c.assignment;
+  return 'Postulado';
+}
 let candidates = [];
 let dragId = null;
 let dragDropped = false;
@@ -570,7 +585,7 @@ function starRating(id, value){
 }
 
 function blank(){
-  return {id: uid(), name:'', role:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
+  return {id: uid(), name:'', role:'', assignment:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
     createdAt: Date.now(), statusChangedAt: Date.now(),
     offerDate:'', startDate:'', endDate:'',
     memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
@@ -732,29 +747,33 @@ function render(){
   renderLastUpdate();
   if(viewMode==='list'){ renderList(); return; }
   const board = document.getElementById('board');
-  board.innerHTML = STAGES.map(stage=>{
-    const items = candidates.filter(c=> c.status===stage.key && matchesFilters(c))
+  board.innerHTML = COLUMNS.map(colm=>{
+    const items = candidates.filter(c=> columnOf(c)===colm.key && matchesFilters(c))
       .sort(sortComparator);
     return `
     <div class="col">
-      <div class="col-header" style="background:${stage.bg}; color:${stage.fg}">
-        <span class="col-title">${stage.key}</span>
+      <div class="col-header" style="background:${colm.bg}; color:${colm.fg}">
+        <span class="col-title">${colm.title}</span>
         <span class="col-count">${items.length}</span>
       </div>
-      <div class="dropzone" data-stage="${escapeHtml(stage.key)}">
+      <div class="dropzone" data-col="${escapeHtml(colm.key)}">
         ${items.map(c=>{
           const p = panelSummary(c);
           const d = stageDays(c);
           const stale = isStale(c);
           const sd = stageDate(c);
           const rs = finalScore(c);
+          const st = stageStyle(c.status);
           return `
           <div class="card ${stale?'stale':''}" draggable="true" data-id="${c.id}">
             <div class="card-top">
               <div class="avatar">${initials(c.name)}</div>
               <div style="min-width:0; flex:1">
                 <p class="card-name">${escapeHtml(c.name)}</p>
-                ${c.role ? `<span class="card-role">${escapeHtml(c.role)}</span>` : ''}
+                <div class="card-badges">
+                  ${c.role ? `<span class="card-role">${escapeHtml(c.role)}</span>` : ''}
+                  <span class="card-status" style="background:${st.bg}; color:${st.fg}">${escapeHtml(c.status)}</span>
+                </div>
               </div>
               ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Resultado final · ${rs.evaluators} de 3 evaluadores">${rs.score}</span>` : ''}
             </div>
@@ -806,12 +825,12 @@ function render(){
     zone.addEventListener('drop', async e=>{
       e.preventDefault();
       dragDropped = true;
-      const stage = zone.getAttribute('data-stage');
+      const col = zone.getAttribute('data-col');
       const c = candidates.find(x=>x.id===dragId);
       if(!c){ render(); return; }
-      const changedStatus = c.status !== stage;
+      const changedCol = columnOf(c) !== col;
       // En modos ordenados (score/reciente) el reordenamiento vertical no aplica
-      if(!changedStatus && sortMode !== 'manual'){ render(); return; }
+      if(!changedCol && sortMode !== 'manual'){ render(); return; }
       // Vecinos según la posición final del card arrastrado dentro de la columna
       const draggingEl = zone.querySelector('.card.dragging');
       const upperId = prevCardId(draggingEl);
@@ -823,12 +842,23 @@ function render(){
       else if(lower)          c.order = orderVal(lower) + STEP; // arriba del todo
       else if(upper)          c.order = orderVal(upper) - STEP; // hasta abajo
       else                    c.order = Date.now();            // columna vacía
-      if(changedStatus){ c.status = stage; c.statusChangedAt = Date.now(); }
+      if(changedCol) applyColumnDrop(c, col);
       c.updatedAt = Date.now();
-      render();                 // refleja el nuevo orden al instante
+      render();                 // refleja el cambio al instante
       await apiSaveCandidate(c); // persiste solo el card movido
     });
   });
+}
+function applyColumnDrop(c, col){
+  if(col === 'Postulado'){
+    c.assignment = '';
+    if(c.status === 'Rechazado'){ c.status = 'Postulado'; c.statusChangedAt = Date.now(); }
+  } else if(col === 'Rechazado'){
+    if(c.status !== 'Rechazado'){ c.status = 'Rechazado'; c.statusChangedAt = Date.now(); }
+  } else { // ximena / memo / jocho
+    c.assignment = col;
+    if(c.status === 'Rechazado'){ c.status = 'Entrevista'; c.statusChangedAt = Date.now(); }
+  }
 }
 function prevCardId(el){
   let p = el ? el.previousElementSibling : null;
@@ -924,6 +954,11 @@ function openModal(id){
           </select>
         </div>
       </div>
+      <label>Asignado a (columna del tablero)</label>
+      <select id="fAssignment">
+        <option value="">— Sin asignar (Postulado)</option>
+        ${EVALUATORS.map(ev=>`<option value="${ev.key}" ${ev.key===(c.assignment||'')?'selected':''}>${ev.label}</option>`).join('')}
+      </select>
       ${linkField('fWhatsapp','WhatsApp',c.whatsapp,'55 1234 5678', waLink(c.whatsapp), 'ti-brand-whatsapp')}
       <div class="row2">
         <div>${linkField('fCv','CV (link)',c.cv,'https://drive.google.com/...', null, 'ti-file-text')}</div>
@@ -1041,6 +1076,7 @@ function openModal(id){
   document.getElementById('btnSave').onclick = async ()=>{
     c.name = document.getElementById('fName').value.trim() || 'Sin nombre';
     c.role = document.getElementById('fRole').value;
+    c.assignment = document.getElementById('fAssignment').value;
     c.linkedin = document.getElementById('fLinkedin').value.trim();
     c.whatsapp = document.getElementById('fWhatsapp').value.trim();
     const nuevoStatus = document.getElementById('fStatus').value;
