@@ -790,7 +790,6 @@ function render(){
             <div class="card-tags">
               ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
               ${normalizeUrl(c.linkedin) ? `<a href="${escapeHtml(normalizeUrl(c.linkedin))}" target="_blank" rel="noopener" class="card-link" title="Ver LinkedIn" onclick="event.stopPropagation()"><i class="ti ti-brand-linkedin" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
-              ${normalizeUrl(c.interviewLink) ? `<a href="${escapeHtml(normalizeUrl(c.interviewLink))}" target="_blank" rel="noopener" class="card-link" title="Abrir entrevista" onclick="event.stopPropagation()"><i class="ti ti-video" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
               ${normalizeUrl(c.cv) ? `<a href="${escapeHtml(normalizeUrl(c.cv))}" target="_blank" rel="noopener" class="card-link" title="Abrir CV" onclick="event.stopPropagation()"><i class="ti ti-file-text" style="font-size:14px;vertical-align:-2px;margin-right:3px"></i>CV</a>` : ''}
               <span class="card-comments" title="Ver y agregar comentarios" onclick="event.stopPropagation(); openModalComments('${c.id}')"><i class="ti ti-message-circle" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>${totalComments(c)}</span>
             </div>
@@ -964,7 +963,6 @@ function openModal(id){
         <div>${linkField('fCv','CV (link)',c.cv,'https://drive.google.com/...', null, 'ti-file-text')}</div>
         <div>${linkField('fLinkedin','LinkedIn',c.linkedin,'https://linkedin.com/in/...', null, 'ti-brand-linkedin')}</div>
       </div>
-      ${linkField('fInterviewLink','Link entrevista',c.interviewLink,'https://meet.google.com/...', null, 'ti-video')}
 
       <div class="section-label">Fechas</div>
       <div class="row2">
@@ -1084,7 +1082,6 @@ function openModal(id){
     c.status = nuevoStatus;
     if(!c.createdAt) c.createdAt = Date.now();
     if(!c.statusChangedAt) c.statusChangedAt = Date.now();
-    c.interviewLink = document.getElementById('fInterviewLink').value.trim();
     c.cv = document.getElementById('fCv').value.trim();
     c.offerDate = document.getElementById('fOfferDate').value;
     c.startDate = document.getElementById('fStartDate').value;
