@@ -636,6 +636,14 @@ function renderMetrics(){
     const p = panelSummary(c);
     return p.yes > 0 && p.no > 0;
   }).length;
+  // Calidad de leads: score promedio y distribucion por banda entre los activos
+  const scores = activos.map(c=>finalScore(c)).filter(Boolean).map(s=>s.score);
+  const prom = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : null;
+  const verdes = scores.filter(s=>s>=80).length;
+  const ambars = scores.filter(s=>s>=60 && s<80).length;
+  const rojos  = scores.filter(s=>s<60).length;
+  const sinCal = activos.length - scores.length;
+  const promColor = prom!==null ? scoreColor(prom).fg : 'var(--matcha)';
 
   el.innerHTML = `
     <div class="metric">
@@ -652,6 +660,13 @@ function renderMetrics(){
       <p class="metric-label">Falta evaluar</p>
       <p class="metric-value">${pendientes}</p>
       <p class="metric-sub">panel incompleto</p>
+    </div>
+    <div class="metric">
+      <p class="metric-label">Calidad de leads</p>
+      <p class="metric-value" style="color:${promColor}">${prom!==null ? prom : '—'}</p>
+      <p class="metric-sub">
+        <span style="color:#0F6E56">●</span> ${verdes} bien &nbsp;<span style="color:#854F0B">●</span> ${ambars} regular &nbsp;<span style="color:#993C1D">●</span> ${rojos} bajo${sinCal ? ` &nbsp;· ${sinCal} sin calificar` : ''}
+      </p>
     </div>
     <div class="metric ${divididos ? 'alert' : ''}">
       <p class="metric-label">Panel dividido</p>
