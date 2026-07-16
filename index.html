@@ -262,6 +262,9 @@ function columnOf(c){
 let candidates = [];
 let dragId = null;
 let dragDropped = false;
+let isDragging = false;
+let savesInFlight = 0;
+let lastLocalChangeAt = 0;
 let viewMode = 'board';
 
 function stageStyle(key){ return STAGES.find(s=>s.key===key) || STAGES[0]; }
@@ -607,6 +610,8 @@ async function loadData(){
   render();
 }
 async function apiSaveCandidate(candidate){
+  savesInFlight++;
+  lastLocalChangeAt = Date.now();
   try{
     await fetch(API_URL, {
       method: 'POST',
@@ -614,8 +619,11 @@ async function apiSaveCandidate(candidate){
       body: JSON.stringify({ action: 'save', candidate })
     });
   }catch(e){ console.error('Error guardando en Google Sheets', e); }
+  finally{ savesInFlight--; lastLocalChangeAt = Date.now(); }
 }
 async function apiDeleteCandidate(id){
+  savesInFlight++;
+  lastLocalChangeAt = Date.now();
   try{
     await fetch(API_URL, {
       method: 'POST',
@@ -623,6 +631,24 @@ async function apiDeleteCandidate(id){
       body: JSON.stringify({ action: 'delete', id })
     });
   }catch(e){ console.error('Error eliminando en Google Sheets', e); }
+  finally{ savesInFlight--; lastLocalChangeAt = Date.now(); }
+}
+
+// Auto-refresh: mantiene el tablero al dia cuando varias personas lo usan a la vez.
+// Se salta el refresh si hay ficha abierta, arrastre en curso o guardado pendiente,
+// y descarta respuestas que lleguen despues de un cambio local (para no revertirlo).
+async function refreshData(){
+  if(document.getElementById('modalRoot').innerHTML !== '') return;
+  if(isDragging || savesInFlight > 0) return;
+  const startedAt = Date.now();
+  try{
+    const res = await fetch(API_URL);
+    const fresh = await res.json();
+    if(lastLocalChangeAt > startedAt) return;                             // llegó tarde: descartar
+    if(document.getElementById('modalRoot').innerHTML !== '' || isDragging) return; // se abrió algo mientras tanto
+    candidates = fresh;
+    render();
+  }catch(e){ console.error('Error refrescando desde Google Sheets', e); }
 }
 
 function renderMetrics(){
@@ -821,11 +847,13 @@ function render(){
     card.addEventListener('dragstart', e=>{
       dragId = card.getAttribute('data-id');
       dragDropped = false;
+      isDragging = true;
       e.dataTransfer.effectAllowed = 'move';
       setTimeout(()=>card.classList.add('dragging'), 0);
     });
     card.addEventListener('dragend', ()=>{
       card.classList.remove('dragging');
+      isDragging = false;
       if(!dragDropped) render(); // se soltó fuera de una columna: restaurar
     });
   });
@@ -1172,6 +1200,9 @@ document.getElementById('btnViewBoard').addEventListener('click', ()=>setView('b
 document.getElementById('btnViewList').addEventListener('click', ()=>setView('list'));
 
 loadData();
+setInterval(refreshData, 45000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshData(); });
+window.addEventListener('focus', refreshData);
 </script>
 </body>
 </html>
