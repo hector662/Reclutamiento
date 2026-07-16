@@ -750,6 +750,8 @@ function render(){
   board.innerHTML = COLUMNS.map(colm=>{
     const items = candidates.filter(c=> columnOf(c)===colm.key && matchesFilters(c))
       .sort(sortComparator);
+    // Postulado solo aparece si tiene candidatos sin asignar (red de seguridad)
+    if(colm.key==='Postulado' && items.length===0) return '';
     return `
     <div class="col">
       <div class="col-header" style="background:${colm.bg}; color:${colm.fg}">
@@ -955,7 +957,7 @@ function openModal(id){
       </div>
       <label>Asignado a (columna del tablero)</label>
       <select id="fAssignment">
-        <option value="">— Sin asignar (Postulado)</option>
+        <option value="">— Sin asignar</option>
         ${EVALUATORS.map(ev=>`<option value="${ev.key}" ${ev.key===(c.assignment||'')?'selected':''}>${ev.label}</option>`).join('')}
       </select>
       ${linkField('fWhatsapp','WhatsApp',c.whatsapp,'55 1234 5678', waLink(c.whatsapp), 'ti-brand-whatsapp')}
