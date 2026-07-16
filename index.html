@@ -403,7 +403,7 @@ function evalDots(c){
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
-const ROLES = ['Sales Lead', 'KAM', 'BDR', 'Otro'];
+const ROLES = ['Sales Lead', 'KAM', 'BDR', 'BDR Jr', 'Otro'];
 
 const CRITERIA = [
   {key:'Cultura',      label:'Cultura'},
