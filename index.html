@@ -141,6 +141,8 @@
   .in-field-btn.active { color: var(--olive); pointer-events: auto; cursor: pointer; }
   .in-field-btn.active:hover { background: var(--mint); }
   .field-warn { font-size: 11px; color: #993C1D; margin: 4px 0 0; }
+  .dup-warn { font-size: 12px; color: #993C1D; background: #FAECE7; border: 1px solid #F0997B; border-radius: 8px; padding: 8px 10px; margin: 6px 0 0; }
+  .dup-warn b { color: #7A3B12; }
   .card-link { color: var(--matcha); text-decoration: none; }
   .card-link:hover { color: var(--olive); }
   .card-comments { color: var(--matcha); cursor: pointer; border-radius: 6px; padding: 1px 5px; margin: -1px -3px; display: inline-flex; align-items: center; }
@@ -258,6 +260,36 @@ function columnOf(c){
   if(c.status === 'Rechazado') return 'Rechazado';
   if(c.assignment === 'ximena' || c.assignment === 'memo' || c.assignment === 'jocho') return c.assignment;
   return 'Postulado';
+}
+// --- Prevención de duplicados: avisa si ya existe un candidato con nombre parecido ---
+function normName(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+function findSimilar(name, excludeId){
+  const target = normName(name);
+  if(!target) return [];
+  const t2 = target.split(' ').slice(0,2).join(' ');
+  return candidates.filter(c=>{
+    if(c.id === excludeId) return false;
+    const n = normName(c.name);
+    if(!n) return false;
+    if(n === target) return true; // nombre idéntico (normalizado)
+    const nn = n.split(' ');
+    return target.split(' ').length>=2 && nn.length>=2 && nn.slice(0,2).join(' ')===t2; // mismo nombre+apellido
+  });
+}
+function updateDupWarning(excludeId){
+  const el = document.getElementById('dupWarn');
+  if(!el) return;
+  const sims = findSimilar(document.getElementById('fName').value, excludeId);
+  if(!sims.length){ el.style.display='none'; el.innerHTML=''; return; }
+  const lista = sims.map(c=>{
+    const cm = COLUMNS.find(x=>x.key===columnOf(c));
+    return `<b>${escapeHtml(c.name)}</b> (${cm?cm.title:columnOf(c)} · ${escapeHtml(c.status)})`;
+  }).join(', ');
+  el.style.display='block';
+  el.innerHTML = `<i class="ti ti-alert-triangle" style="font-size:13px;vertical-align:-1px;margin-right:4px"></i>Ya existe ${sims.length>1?'candidatos parecidos':'un candidato parecido'}: ${lista}. ¿Es la misma persona?`;
 }
 let candidates = [];
 let dragId = null;
@@ -983,6 +1015,7 @@ function openModal(id){
 
       <div class="section-label">Datos</div>
       ${field('fName','Nombre',c.name,'Nombre del candidato')}
+      <p id="dupWarn" class="dup-warn" style="display:none"></p>
       <div class="row2">
         <div>
           <label>Rol / vacante</label>
@@ -1103,6 +1136,8 @@ function openModal(id){
 
   document.getElementById('btnClose').onclick = closeModal;
   updateRubScore();
+  document.getElementById('fName').addEventListener('input', ()=>updateDupWarning(id));
+  updateDupWarning(id);
   document.getElementById('btnAddComment').onclick = async ()=>{
     const text = document.getElementById('fComment').value.trim();
     if(!text) return;
