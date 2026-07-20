@@ -92,6 +92,8 @@
   .col-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 6px; }
   .col-title { font-size: 13px; font-weight: 700; }
   .col-count { font-size: 12px; opacity: 0.7; }
+  .col-archive-btn { font-family: inherit; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.15); background: rgba(255,255,255,0.7); color: inherit; cursor: pointer; }
+  .col-archive-btn:hover { background: #fff; }
   .dropzone { display: flex; flex-direction: column; gap: 8px; min-height: 40px; border-radius: 8px; transition: background 0.1s; }
   .card { background: var(--gray-9); border: 1px solid var(--gray-7); border-radius: 8px; padding: 10px; cursor: grab; }
   .card:active { cursor: grabbing; }
@@ -218,6 +220,7 @@
     <select id="filterStage" style="width:145px"></select>
     <select id="filterPending" style="width:165px"></select>
     <button id="btnStale" class="ghost" title="Solo candidatos estancados"><i class="ti ti-alert-triangle" style="font-size:15px;vertical-align:-2px;margin-right:4px"></i>Estancados</button>
+    <button id="btnArchived" class="ghost" title="Ver candidatos archivados"><i class="ti ti-archive" style="font-size:15px;vertical-align:-2px;margin-right:4px"></i>Archivados</button>
     <button id="btnClearFilters" class="ghost" title="Limpiar filtros"><i class="ti ti-x" style="font-size:15px;vertical-align:-2px"></i></button>
     <select id="sortBy" style="width:160px" title="Ordenar candidatos">
       <option value="manual">Orden: mi orden</option>
@@ -261,6 +264,9 @@ function columnOf(c){
   if(c.assignment === 'ximena' || c.assignment === 'memo' || c.assignment === 'jocho') return c.assignment;
   return 'Postulado';
 }
+function isArchived(c){ return !!c.archived; }
+// Cuando showArchived está activo se ven SOLO los archivados (modo revisión); si no, se ocultan.
+function passesArchive(c){ return showArchived ? isArchived(c) : !isArchived(c); }
 // --- Prevención de duplicados: avisa si ya existe un candidato con nombre parecido ---
 function normName(s){
   return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
@@ -303,7 +309,7 @@ function stageStyle(key){ return STAGES.find(s=>s.key===key) || STAGES[0]; }
 
 function renderList(){
   const list = document.getElementById('list');
-  const items = candidates.filter(matchesFilters)
+  const items = candidates.filter(c=>passesArchive(c) && matchesFilters(c))
     .sort(sortComparator);
 
   if(items.length===0){
@@ -620,7 +626,7 @@ function starRating(id, value){
 }
 
 function blank(){
-  return {id: uid(), name:'', role:'', assignment:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
+  return {id: uid(), name:'', role:'', assignment:'', archived:'', linkedin:'', status:STAGES[0].key, interviewLink:'', cv:'', whatsapp:'',
     createdAt: Date.now(), statusChangedAt: Date.now(),
     offerDate:'', startDate:'', endDate:'',
     memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
@@ -683,14 +689,22 @@ async function refreshData(){
   }catch(e){ console.error('Error refrescando desde Google Sheets', e); }
 }
 
+function renderArchivedBtn(){
+  const btn = document.getElementById('btnArchived');
+  if(!btn) return;
+  const n = candidates.filter(isArchived).length;
+  btn.innerHTML = `<i class="ti ti-archive" style="font-size:15px;vertical-align:-2px;margin-right:4px"></i>${showArchived ? 'Ver activos' : 'Archivados'}${n ? ` (${n})` : ''}`;
+  btn.classList.toggle('active-filter', showArchived);
+}
 function renderMetrics(){
   const el = document.getElementById('metrics');
   if(!el) return;
-  const activos = candidates.filter(c=>ACTIVE_STAGES.includes(c.status));
-  const estancados = candidates.filter(isStale);
-  const contratados = candidates.filter(c=>c.status==='Contratado').length;
+  const vivos = candidates.filter(c=>!isArchived(c)); // las métricas ignoran archivados
+  const activos = vivos.filter(c=>ACTIVE_STAGES.includes(c.status));
+  const estancados = vivos.filter(isStale);
+  const contratados = vivos.filter(c=>c.status==='Contratado').length;
   const pendientes = activos.filter(c=>panelSummary(c).done < 3).length;
-  const divididos = candidates.filter(c=>{
+  const divididos = vivos.filter(c=>{
     const p = panelSummary(c);
     return p.yes > 0 && p.no > 0;
   }).length;
@@ -707,7 +721,7 @@ function renderMetrics(){
     <div class="metric">
       <p class="metric-label">En pipeline</p>
       <p class="metric-value">${activos.length}</p>
-      <p class="metric-sub">${candidates.length} en total</p>
+      <p class="metric-sub">${vivos.length} en total</p>
     </div>
     <div class="metric ${estancados.length ? 'alert' : ''}">
       <p class="metric-label">Estancados</p>
@@ -739,6 +753,22 @@ function renderMetrics(){
 }
 
 let staleOnly = false;
+let showArchived = false;
+function archiveAllRejected(){
+  const rej = candidates.filter(c=>c.status==='Rechazado' && !isArchived(c));
+  if(!rej.length) return;
+  if(!confirm(`¿Archivar ${rej.length} candidato${rej.length>1?'s':''} rechazado${rej.length>1?'s':''}? Salen del tablero pero no se borran; los ves con el botón "Archivados".`)) return;
+  const now = Date.now();
+  rej.forEach(c=>{ c.archived = now; c.updatedAt = now; });
+  render();
+  (async ()=>{ for(const c of rej){ await apiSaveCandidate(c); } })(); // persiste en segundo plano
+}
+async function setArchived(c, val){
+  c.archived = val ? Date.now() : '';
+  c.updatedAt = Date.now();
+  render();
+  await apiSaveCandidate(c);
+}
 
 function renderRoleFilter(){
   const rol = document.getElementById('filterRole');
@@ -818,10 +848,11 @@ function render(){
   renderRoleFilter();
   renderFilterCount();
   renderLastUpdate();
+  renderArchivedBtn();
   if(viewMode==='list'){ renderList(); return; }
   const board = document.getElementById('board');
   board.innerHTML = COLUMNS.map(colm=>{
-    const items = candidates.filter(c=> columnOf(c)===colm.key && matchesFilters(c))
+    const items = candidates.filter(c=> columnOf(c)===colm.key && passesArchive(c) && matchesFilters(c))
       .sort(sortComparator);
     // Postulado solo aparece si tiene candidatos sin asignar (red de seguridad)
     if(colm.key==='Postulado' && items.length===0) return '';
@@ -829,7 +860,7 @@ function render(){
     <div class="col">
       <div class="col-header" style="background:${colm.bg}; color:${colm.fg}">
         <span class="col-title">${colm.title}</span>
-        <span class="col-count">${items.length}</span>
+        ${colm.key==='Rechazado' && !showArchived && items.length ? `<button class="col-archive-btn" title="Archivar todos los rechazados" onclick="archiveAllRejected()"><i class="ti ti-archive" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>Archivar</button>` : `<span class="col-count">${items.length}</span>`}
       </div>
       <div class="dropzone" data-col="${escapeHtml(colm.key)}">
         ${items.map(c=>{
@@ -1129,6 +1160,7 @@ function openModal(id){
 
       <div class="modal-footer">
         <button id="btnDelete" class="danger">${isNew ? '' : '<i class="ti ti-trash" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Eliminar'}</button>
+        ${isNew ? '' : `<button id="btnArchive" class="ghost"><i class="ti ti-archive" style="font-size:15px;vertical-align:-2px;margin-right:4px"></i>${isArchived(c)?'Desarchivar':'Archivar'}</button>`}
         <button id="btnSave"><i class="ti ti-check" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Guardar</button>
       </div>
     </div>
@@ -1199,6 +1231,11 @@ function openModal(id){
       closeModal();
       render();
     };
+    document.getElementById('btnArchive').onclick = ()=>{
+      const target = !isArchived(c);
+      closeModal();
+      setArchived(c, target);
+    };
   }
 }
 function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
@@ -1221,6 +1258,11 @@ document.getElementById('btnStale').addEventListener('click', ()=>{
   document.getElementById('btnStale').classList.toggle('active-filter', staleOnly);
   render();
 });
+document.getElementById('btnArchived').addEventListener('click', ()=>{
+  showArchived = !showArchived;
+  document.getElementById('btnArchived').classList.toggle('active-filter', showArchived);
+  render();
+});
 document.getElementById('btnClearFilters').addEventListener('click', ()=>{
   document.getElementById('search').value = '';
   document.getElementById('filterRole').value = '';
@@ -1228,6 +1270,7 @@ document.getElementById('btnClearFilters').addEventListener('click', ()=>{
   document.getElementById('filterPending').value = '';
   staleOnly = false;
   document.getElementById('btnStale').classList.remove('active-filter');
+  showArchived = false;
   render();
 });
 document.getElementById('sortBy').addEventListener('change', e=>{ sortMode = e.target.value; render(); });
