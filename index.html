@@ -253,14 +253,18 @@ const STAGES = [
 ];
 // Columnas del tablero: por ASIGNACIÓN (quién es dueño), con Postulado y Rechazado por status
 const COLUMNS = [
-  {key:"Postulado", type:"status", title:"Postulado", bg:"#EFF2F7", fg:"#323338"},
-  {key:"ximena",    type:"assign", title:"Ximena",    bg:"#FBE7DE", fg:"#B0421B"},
-  {key:"memo",      type:"assign", title:"Memo",      bg:"#DFF3EA", fg:"#0F6E56"},
-  {key:"jocho",     type:"assign", title:"Jocho",     bg:"#E7E5FB", fg:"#4B44B5"},
-  {key:"Rechazado", type:"status", title:"Rechazado", bg:"#FFE2CC", fg:"#7A3B12"}
+  {key:"Postulado",  type:"status", title:"Postulado",  bg:"#EFF2F7", fg:"#323338"},
+  {key:"ximena",     type:"assign", title:"Ximena",     bg:"#FBE7DE", fg:"#B0421B"},
+  {key:"memo",       type:"assign", title:"Memo",       bg:"#DFF3EA", fg:"#0F6E56"},
+  {key:"jocho",      type:"assign", title:"Jocho",      bg:"#E7E5FB", fg:"#4B44B5"},
+  {key:"Oferta",     type:"status", title:"Oferta",     bg:"#EAFAFF", fg:"#242A42"},
+  {key:"Contratado", type:"status", title:"Contratado", bg:"#A9FFAE", fg:"#273D37"},
+  {key:"Rechazado",  type:"status", title:"Rechazado",  bg:"#FFE2CC", fg:"#7A3B12"}
 ];
 function columnOf(c){
-  if(c.status === 'Rechazado') return 'Rechazado';
+  if(c.status === 'Rechazado')  return 'Rechazado';
+  if(c.status === 'Contratado') return 'Contratado';
+  if(c.status === 'Oferta')     return 'Oferta';
   if(c.assignment === 'ximena' || c.assignment === 'memo' || c.assignment === 'jocho') return c.assignment;
   return 'Postulado';
 }
@@ -957,14 +961,20 @@ function render(){
   });
 }
 function applyColumnDrop(c, col){
+  const TERMINALES = ['Rechazado','Oferta','Contratado']; // status que "ganan" a la asignación
+  const setStatus = s => { if(c.status !== s){ c.status = s; c.statusChangedAt = Date.now(); } };
   if(col === 'Postulado'){
     c.assignment = '';
-    if(c.status === 'Rechazado'){ c.status = 'Postulado'; c.statusChangedAt = Date.now(); }
+    if(TERMINALES.includes(c.status)) setStatus('Postulado');
   } else if(col === 'Rechazado'){
-    if(c.status !== 'Rechazado'){ c.status = 'Rechazado'; c.statusChangedAt = Date.now(); }
-  } else { // ximena / memo / jocho
+    setStatus('Rechazado');
+  } else if(col === 'Oferta'){
+    setStatus('Oferta');
+  } else if(col === 'Contratado'){
+    setStatus('Contratado');
+  } else { // ximena / memo / jocho: pasa a "en entrevista" bajo ese dueño
     c.assignment = col;
-    if(c.status === 'Rechazado'){ c.status = 'Entrevista'; c.statusChangedAt = Date.now(); }
+    if(TERMINALES.includes(c.status)) setStatus('Entrevista');
   }
 }
 function prevCardId(el){
