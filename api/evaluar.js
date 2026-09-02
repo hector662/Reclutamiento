@@ -26,10 +26,10 @@ const ESQUEMA = {
     estrellas: {
       type: 'object',
       properties: {
-        Cultura:      { type: ['integer', 'null'], minimum: 1, maximum: 5 },
-        Experiencia:  { type: ['integer', 'null'], minimum: 1, maximum: 5 },
-        Comunicacion: { type: ['integer', 'null'], minimum: 1, maximum: 5 },
-        Potencial:    { type: ['integer', 'null'], minimum: 1, maximum: 5 }
+        Cultura:      { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' },
+        Experiencia:  { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' },
+        Comunicacion: { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' },
+        Potencial:    { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' }
       },
       required: ['Cultura', 'Experiencia', 'Comunicacion', 'Potencial'],
       additionalProperties: false
@@ -40,7 +40,7 @@ const ESQUEMA = {
         type: 'object',
         properties: {
           nombre: { type: 'string' },
-          score:  { type: ['integer', 'null'], minimum: 1, maximum: 4, description: '4 excede · 3 cumple · 2 riesgo · 1 no cumple. null si no se tocó el tema.' },
+          score:  { type: ['integer', 'null'], description: '4 excede · 3 cumple · 2 riesgo · 1 no cumple. null si no se tocó el tema.' },
           nota:   { type: 'string', description: 'Una o dos líneas con la evidencia textual. Vacío si el bloque no se tocó.' }
         },
         required: ['nombre', 'score', 'nota'],
@@ -115,6 +115,24 @@ ${notas}
 
 Califica esta entrevista contra la guía de ${rubrica.rol}. Devuelve un bloque por
 cada uno de los ${rubrica.bloques.length} bloques de la guía, en el mismo orden y con el mismo nombre.`;
+}
+
+// El esquema de salida no admite minimum/maximum, así que el rango se acota aquí.
+function acotar(v, min, max){
+  const n = Number(v);
+  if(!Number.isFinite(n)) return null;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+function normalizar(ev){
+  const e = ev.estrellas || {};
+  ev.estrellas = {
+    Cultura:      acotar(e.Cultura, 1, 5),
+    Experiencia:  acotar(e.Experiencia, 1, 5),
+    Comunicacion: acotar(e.Comunicacion, 1, 5),
+    Potencial:    acotar(e.Potencial, 1, 5)
+  };
+  ev.bloques = (ev.bloques || []).map(b => ({ ...b, score: acotar(b.score, 1, 4) }));
+  return ev;
 }
 
 // El texto que se precarga en el comentario del evaluador.
@@ -214,7 +232,7 @@ export default async function handler(req, res){
     const json = respuesta.content.find(b => b.type === 'text')?.text;
     if(!json) return res.status(502).json({ error: 'El modelo no devolvió una evaluación.' });
 
-    const ev = JSON.parse(json);
+    const ev = normalizar(JSON.parse(json));
     return res.status(200).json({
       rol: rubrica.rol,
       decision: ev.decision,
