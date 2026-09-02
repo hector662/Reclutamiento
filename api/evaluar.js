@@ -146,6 +146,28 @@ function armarComentario(ev, rubrica){
   return l.join('\n');
 }
 
+// Los errores de la API vienen como JSON crudo; quien está evaluando a un
+// candidato no tiene por qué leer eso. Se traduce a qué hacer al respecto.
+function mensajeDeError(e){
+  const crudo = e?.error?.error?.message || e?.message || '';
+  if(/anthropic-workspace-id is required/i.test(crudo)){
+    return 'La llave de la API está ligada a una identidad y le falta el workspace. En Vercel: agrega ANTHROPIC_WORKSPACE_ID, o reemplaza la llave por una de cuenta de servicio.';
+  }
+  if(e?.status === 401 || /authentication|invalid x-api-key/i.test(crudo)){
+    return 'La llave de la API no es válida. Revisa ANTHROPIC_API_KEY en Vercel.';
+  }
+  if(e?.status === 429){
+    return 'La API está saturada en este momento. Vuelve a intentar en un minuto.';
+  }
+  if(e?.status === 529 || (e?.status >= 500 && e?.status < 600)){
+    return 'La API no respondió. Vuelve a intentar en un momento.';
+  }
+  if(e instanceof SyntaxError){
+    return 'La evaluación llegó incompleta. Vuelve a intentar.';
+  }
+  return 'No se pudo evaluar la entrevista. Detalle para el log: ' + (crudo || 'sin detalle');
+}
+
 export default async function handler(req, res){
   if(req.method !== 'POST'){
     return res.status(405).json({ error: 'Usa POST.' });
@@ -203,6 +225,6 @@ export default async function handler(req, res){
   }catch(e){
     console.error('Error evaluando la entrevista', e);
     const status = e?.status && e.status >= 400 && e.status < 600 ? e.status : 502;
-    return res.status(status).json({ error: e?.message || 'No se pudo evaluar la entrevista.' });
+    return res.status(status).json({ error: mensajeDeError(e) });
   }
 }
