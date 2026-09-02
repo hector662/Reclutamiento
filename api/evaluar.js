@@ -16,6 +16,16 @@ const ORIGENES_OK = [
   /^http:\/\/127\.0\.0\.1(:\d+)?$/i
 ];
 
+// La salida estructurada no admite tipos nulables como ['integer','null'];
+// la forma que sí acepta es anyOf. Tampoco admite minimum/maximum ni maxItems,
+// así que los rangos se declaran en la descripción y se acotan al recibir.
+function nulable(description){
+  return { anyOf: [{ type: 'integer' }, { type: 'null' }], description };
+}
+function entero1a5(crit){
+  return nulable(`${crit}, de 1 a 5. null si ningún bloque de este criterio se tocó en la entrevista.`);
+}
+
 const ESQUEMA = {
   type: 'object',
   properties: {
@@ -26,10 +36,10 @@ const ESQUEMA = {
     estrellas: {
       type: 'object',
       properties: {
-        Cultura:      { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' },
-        Experiencia:  { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' },
-        Comunicacion: { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' },
-        Potencial:    { type: ['integer', 'null'], description: 'De 1 a 5. null si ningún bloque de este criterio se tocó.' }
+        Cultura:      entero1a5('Cultura'),
+        Experiencia:  entero1a5('Experiencia'),
+        Comunicacion: entero1a5('Comunicación'),
+        Potencial:    entero1a5('Potencial')
       },
       required: ['Cultura', 'Experiencia', 'Comunicacion', 'Potencial'],
       additionalProperties: false
@@ -40,15 +50,15 @@ const ESQUEMA = {
         type: 'object',
         properties: {
           nombre: { type: 'string' },
-          score:  { type: ['integer', 'null'], description: '4 excede · 3 cumple · 2 riesgo · 1 no cumple. null si no se tocó el tema.' },
+          score:  nulable('4 excede · 3 cumple · 2 riesgo · 1 no cumple. null si no se tocó el tema.'),
           nota:   { type: 'string', description: 'Una o dos líneas con la evidencia textual. Vacío si el bloque no se tocó.' }
         },
         required: ['nombre', 'score', 'nota'],
         additionalProperties: false
       }
     },
-    fortalezas: { type: 'array', items: { type: 'string' }, maxItems: 3 },
-    riesgos:    { type: 'array', items: { type: 'string' }, maxItems: 3, description: 'Cada uno termina en «→ cómo lo mitigo».' },
+    fortalezas: { type: 'array', items: { type: 'string' }, description: 'Hasta 3. No rellenes por rellenar.' },
+    riesgos:    { type: 'array', items: { type: 'string' }, description: 'Hasta 3. Cada uno termina en «→ cómo lo mitigo».' },
     sin_cubrir: { type: 'array', items: { type: 'string' }, description: 'Bloques que la entrevista no tocó.' }
   },
   required: ['veredicto', 'confianza', 'decision', 'resumen', 'estrellas', 'bloques', 'fortalezas', 'riesgos', 'sin_cubrir'],
@@ -132,6 +142,8 @@ function normalizar(ev){
     Potencial:    acotar(e.Potencial, 1, 5)
   };
   ev.bloques = (ev.bloques || []).map(b => ({ ...b, score: acotar(b.score, 1, 4) }));
+  ev.fortalezas = (ev.fortalezas || []).slice(0, 3);
+  ev.riesgos = (ev.riesgos || []).slice(0, 3);
   return ev;
 }
 
