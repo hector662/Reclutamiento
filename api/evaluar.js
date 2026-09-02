@@ -167,7 +167,12 @@ export default async function handler(req, res){
   const rubrica = rubricaParaRol(rol || candidato?.rol);
 
   try{
-    const client = new Anthropic();
+    // Las llaves ligadas a una identidad exigen además el id del workspace;
+    // las llaves normales del Console no lo necesitan y la variable se omite.
+    const wsId = process.env.ANTHROPIC_WORKSPACE_ID;
+    const client = new Anthropic(
+      wsId ? { defaultHeaders: { 'anthropic-workspace-id': wsId } } : {}
+    );
     const respuesta = await client.messages.create({
       model: MODEL,
       max_tokens: 16000,

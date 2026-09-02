@@ -29,6 +29,15 @@ Requiere una variable de entorno en el proyecto de Vercel:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
+Si la llave está ligada a una identidad (en vez de a un workspace), la API pide
+además el workspace en el que actúa. En ese caso se agrega también:
+
+```
+ANTHROPIC_WORKSPACE_ID=wrkspc_...
+```
+
+Con una llave normal creada desde el Console esa segunda variable no hace falta.
+
 Para cambiar las preguntas o cómo pesan en las estrellas del tablero, se edita
 `api/rubricas.js` (cada bloque declara a qué criterio —Cultura, Experiencia,
 Comunicación, Potencial— contribuye).
