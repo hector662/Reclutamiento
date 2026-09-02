@@ -88,6 +88,9 @@ CÓMO SE CALIFICA CADA BLOQUE (1 a 4)
   tocó, su score es null, su nota va vacía y el nombre del bloque va en sin_cubrir.
   Nunca inventes una respuesta que el candidato no dio, ni infieras un score a
   partir del CV o del tono general.
+  Un bloque en sin_cubrir NUNCA lleva score: no se tocó, así que no hay nada que
+  calificar. Ponerle 1 sería castigar al candidato por una pregunta que nadie le
+  hizo. Las dos listas tienen que ser coherentes entre sí.
 
 CÓMO SALEN LAS ESTRELLAS DEL TABLERO (1 a 5)
 ${guia}
@@ -103,8 +106,11 @@ ${rubrica.notas.map(n => `  - ${n}`).join('\n')}
 
 DECISIÓN
   decision es lo que se escribe en el tablero: Yes, Maybe o No.
-  Strong Hire y Hire → Yes. No Hire y Strong No Hire → No.
-  Usa Maybe cuando la confianza sea Baja o cuando falten bloques clave por cubrir.
+  Regla, en este orden:
+  1. Si la confianza es Baja, o si quedaron sin cubrir bloques que cambiarían el
+     veredicto, decision es Maybe sin importar el veredicto.
+  2. Si no, Strong Hire y Hire → Yes; No Hire y Strong No Hire → No.
+  Que el veredicto y la decisión no se contradigan sin una de esas dos razones.
 
 Escribe todo en español de México, directo y sin relleno.`;
 }
@@ -141,7 +147,17 @@ function normalizar(ev){
     Comunicacion: acotar(e.Comunicacion, 1, 5),
     Potencial:    acotar(e.Potencial, 1, 5)
   };
-  ev.bloques = (ev.bloques || []).map(b => ({ ...b, score: acotar(b.score, 1, 4) }));
+  // Un bloque que no se tocó no puede traer calificación: un 1 de oficio ahí
+  // hunde al candidato por una pregunta que nadie le hizo. Se hace valer la
+  // coherencia en las dos direcciones.
+  const sinCubrir = new Set((ev.sin_cubrir || []).map(s => (s || '').trim().toLowerCase()));
+  ev.bloques = (ev.bloques || []).map(b => {
+    const fuera = sinCubrir.has((b.nombre || '').trim().toLowerCase());
+    const score = fuera ? null : acotar(b.score, 1, 4);
+    return { ...b, score, nota: score == null ? '' : b.nota };
+  });
+  ev.sin_cubrir = ev.bloques.filter(b => b.score == null).map(b => b.nombre);
+
   ev.fortalezas = (ev.fortalezas || []).slice(0, 3);
   ev.riesgos = (ev.riesgos || []).slice(0, 3);
   return ev;
