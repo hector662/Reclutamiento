@@ -1,0 +1,8 @@
+{
+  "name": "reclutamiento",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0"
+  }
+}

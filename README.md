@@ -2,18 +2,33 @@
 
 Tablero de reclutamiento para el equipo de Mercanto: candidatos, CVs, comentarios y status del proceso.
 
+## Cómo está armado
+
+- `index.html` — el tablero completo (una sola página, sin build).
+- `api/evaluar.js` — función de Vercel que convierte las notas de Granola en un borrador de evaluación.
+- `api/rubricas.js` — las guías de entrevista de BDR y KAM, transcritas de los Sheets.
+
+Los datos de los candidatos viven en un Google Sheet detrás de un Apps Script
+(`API_URL` en `index.html`): el tablero lee con `GET` y guarda con `POST`.
+
 ## Deploy en Vercel
 
-1. Sube esta carpeta a un repositorio de GitHub.
-2. Entra a https://vercel.com/new
-3. Importa ese repositorio (Vercel detecta `index.html` automáticamente, no necesita configuración de build).
-4. Click en "Deploy".
+Vercel detecta `index.html` y la carpeta `api/` automáticamente, sin configuración de build.
+Cada push a la rama principal actualiza el sitio.
 
-Listo. Cada vez que subas un cambio a la rama principal del repo, Vercel actualiza el sitio solo.
+## Evaluar con IA
 
-## Nota sobre los datos
+En la ficha de cada candidato, cada evaluador tiene un botón **Evaluar con IA**: pegas
+las notas o el transcript de Granola y el borrador se precarga en su sección
+—estrellas, decisión y comentario— calificado contra la guía de BDR o de KAM según
+el rol del candidato. **No guarda nada**: quien entrevistó revisa y le da Guardar.
 
-Este archivo usa `window.storage`, una API que solo funciona dentro de artefactos de Claude.ai.
-Fuera de Claude (en Vercel), esas líneas de guardado/carga de candidatos no van a funcionar —
-hay que reemplazarlas por una base de datos real (por ejemplo Supabase, Firebase, o una API propia)
-antes de usarlo en producción con datos compartidos de verdad.
+Requiere una variable de entorno en el proyecto de Vercel:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Para cambiar las preguntas o cómo pesan en las estrellas del tablero, se edita
+`api/rubricas.js` (cada bloque declara a qué criterio —Cultura, Experiencia,
+Comunicación, Potencial— contribuye).
