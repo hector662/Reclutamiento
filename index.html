@@ -511,6 +511,84 @@ function openGuide(){
 }
 function closeGuide(){ document.getElementById('guideRoot').innerHTML=''; }
 
+// --- Borrador de evaluación con IA a partir de las notas de Granola ---
+// Califica contra la guía del rol (BDR o KAM) y precarga la sección del
+// evaluador. No guarda nada: quien entrevistó revisa y le da Guardar.
+function openAiEval(evalKey){
+  const ev = EVALUATORS.find(e=>e.key===evalKey);
+  if(!ev) return;
+  const rol = (document.getElementById('fRole')||{}).value || '';
+  const guia = /kam|sales lead/i.test(rol) ? 'KAM' : 'BDR';
+  const root = document.getElementById('guideRoot');
+  root.innerHTML = `
+  <div class="modal-bg" style="z-index:20" id="aiBg">
+    <div class="modal" style="max-width:620px">
+      <div class="modal-header">
+        <p class="modal-title"><i class="ti ti-sparkles" style="font-size:18px;vertical-align:-2px;margin-right:4px"></i>Evaluar con IA · ${ev.label}</p>
+        <button class="icon-btn" id="btnCloseAi" aria-label="Cerrar" style="font-size:18px; line-height:1">&times;</button>
+      </div>
+      <p style="font-size:13px; color:var(--text-dark); margin:4px 0 12px">Pega las notas o el transcript de Granola. Se califica contra la <b>guía de ${guia}</b> y el borrador se precarga en la sección de ${ev.label} para que lo revises antes de guardar.</p>
+      <textarea id="aiNotas" style="min-height:220px" placeholder="Pega aquí las notas de Granola…"></textarea>
+      <p id="aiMsg" style="font-size:12px; color:var(--matcha); margin:8px 0 0; min-height:16px"></p>
+      <div class="modal-footer">
+        <button id="btnRunAi"><i class="ti ti-sparkles" style="font-size:16px;vertical-align:-2px;margin-right:4px"></i>Evaluar</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('btnCloseAi').onclick = closeGuide;
+  document.getElementById('aiBg').addEventListener('click', e=>{ if(e.target.id==='aiBg') closeGuide(); });
+  document.getElementById('aiNotas').focus();
+  document.getElementById('btnRunAi').onclick = async ()=>{
+    const notas = document.getElementById('aiNotas').value.trim();
+    const msg = document.getElementById('aiMsg');
+    const btn = document.getElementById('btnRunAi');
+    if(notas.length < 200){ msg.textContent = 'Pega las notas completas: con menos de 200 caracteres no hay nada que calificar.'; return; }
+    btn.disabled = true;
+    msg.textContent = 'Evaluando contra la guía de ' + guia + '… (puede tardar un minuto)';
+    try{
+      const res = await fetch('/api/evaluar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rol,
+          notas,
+          candidato: {
+            nombre: (document.getElementById('fName')||{}).value || '',
+            rol,
+            entrevistador: ev.label
+          }
+        })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'No se pudo evaluar.');
+      aplicarEvaluacionIA(evalKey, data);
+      closeGuide();
+    }catch(e){
+      btn.disabled = false;
+      msg.textContent = e.message;
+    }
+  };
+}
+function aplicarEvaluacionIA(evalKey, data){
+  const cap = evalKey.charAt(0).toUpperCase() + evalKey.slice(1);
+  const dec = document.getElementById('f'+cap+'Decision');
+  if(dec && data.decision) dec.value = data.decision;
+  CRITERIA.forEach(cr=>{
+    const n = Number((data.estrellas||{})[cr.key]) || 0;
+    if(!n) return;
+    const id = 'fld_' + rubKey(evalKey, cr.key);
+    const inp = document.getElementById(id);
+    if(!inp) return;
+    inp.value = String(n);
+    paintStars(id, n);
+  });
+  const nota = document.getElementById('f'+cap+'NoteDate');
+  if(nota && !nota.value) nota.value = new Date().toISOString().slice(0,10);
+  const ta = document.getElementById('f'+cap+'Feedback');
+  if(ta) ta.value = ta.value.trim() ? (ta.value.trim() + '\n\n———\n' + data.comentario) : data.comentario;
+  updateRubScore();
+}
+
 // Score de un evaluador: promedio de los criterios que calificó (x20), o null
 function evalRubricScore(c, evalKey){
   const vals = CRITERIA.map(cr=>Number(c[rubKey(evalKey, cr.key)])||0).filter(v=>v>0);
@@ -1096,6 +1174,7 @@ function openModal(id){
         <div class="eval-header">
           <span class="eval-avatar" style="background:#D85A30">X</span>
           <span class="eval-name">Ximena · People &amp; Culture</span>
+          <button type="button" class="mini-link" style="margin-left:auto" onclick="openAiEval('ximena')"><i class="ti ti-sparkles" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Evaluar con IA</button>
         </div>
         <div class="row2">
           <div>
@@ -1117,6 +1196,7 @@ function openModal(id){
         <div class="eval-header">
           <span class="eval-avatar" style="background:#1D9E75">M</span>
           <span class="eval-name">Memo</span>
+          <button type="button" class="mini-link" style="margin-left:auto" onclick="openAiEval('memo')"><i class="ti ti-sparkles" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Evaluar con IA</button>
         </div>
         <label>Decision</label>
         <select id="fMemoDecision">${decisionOptions(c.memoDecision)}</select>
@@ -1133,6 +1213,7 @@ function openModal(id){
         <div class="eval-header">
           <span class="eval-avatar" style="background:#7F77DD">J</span>
           <span class="eval-name">Jocho</span>
+          <button type="button" class="mini-link" style="margin-left:auto" onclick="openAiEval('jocho')"><i class="ti ti-sparkles" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Evaluar con IA</button>
         </div>
         <label>Decision</label>
         <select id="fJochoDecision">${decisionOptions(c.jochoDecision)}</select>
