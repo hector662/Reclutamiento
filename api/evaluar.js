@@ -139,7 +139,7 @@ function acotar(v, min, max){
   if(!Number.isFinite(n)) return null;
   return Math.min(max, Math.max(min, Math.round(n)));
 }
-function normalizar(ev){
+function normalizar(ev, rubrica){
   const e = ev.estrellas || {};
   ev.estrellas = {
     Cultura:      acotar(e.Cultura, 1, 5),
@@ -157,6 +157,18 @@ function normalizar(ev){
     return { ...b, score, nota: score == null ? '' : b.nota };
   });
   ev.sin_cubrir = ev.bloques.filter(b => b.score == null).map(b => b.nombre);
+
+  // Una estrella solo puede existir si al menos uno de los bloques que la
+  // alimentan se observó. Si ninguno se tocó, el criterio va sin calificar y el
+  // tablero lo deja en blanco, en vez de arrastrar el score con un 1 inventado.
+  const califico = new Map();
+  for(const b of rubrica.bloques){
+    const enc = ev.bloques.find(x => (x.nombre || '').trim().toLowerCase() === b.nombre.trim().toLowerCase());
+    if(enc && enc.score != null) califico.set(b.criterio, true);
+  }
+  for(const crit of Object.keys(ev.estrellas)){
+    if(!califico.get(crit)) ev.estrellas[crit] = null;
+  }
 
   ev.fortalezas = (ev.fortalezas || []).slice(0, 3);
   ev.riesgos = (ev.riesgos || []).slice(0, 3);
@@ -260,7 +272,7 @@ export default async function handler(req, res){
     const json = respuesta.content.find(b => b.type === 'text')?.text;
     if(!json) return res.status(502).json({ error: 'El modelo no devolvió una evaluación.' });
 
-    const ev = normalizar(JSON.parse(json));
+    const ev = normalizar(JSON.parse(json), rubrica);
     return res.status(200).json({
       rol: rubrica.rol,
       decision: ev.decision,
