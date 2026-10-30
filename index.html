@@ -256,6 +256,7 @@ const COLUMNS = [
   {key:"Postulado",  type:"status", title:"Postulado",  bg:"#EFF2F7", fg:"#323338"},
   {key:"ximena",     type:"assign", title:"Ximena",     bg:"#FBE7DE", fg:"#B0421B"},
   {key:"memo",       type:"assign", title:"Memo",       bg:"#DFF3EA", fg:"#0F6E56"},
+  {key:"sergio",     type:"assign", title:"Sergio",     bg:"#DDEBFB", fg:"#1D5F9E"},
   {key:"jocho",      type:"assign", title:"Jocho",      bg:"#E7E5FB", fg:"#4B44B5"},
   {key:"Oferta",     type:"status", title:"Oferta",     bg:"#EAFAFF", fg:"#242A42"},
   {key:"Contratado", type:"status", title:"Contratado", bg:"#A9FFAE", fg:"#273D37"},
@@ -265,7 +266,7 @@ function columnOf(c){
   if(c.status === 'Rechazado')  return 'Rechazado';
   if(c.status === 'Contratado') return 'Contratado';
   if(c.status === 'Oferta')     return 'Oferta';
-  if(c.assignment === 'ximena' || c.assignment === 'memo' || c.assignment === 'jocho') return c.assignment;
+  if(c.assignment === 'ximena' || c.assignment === 'memo' || c.assignment === 'jocho' || c.assignment === 'sergio') return c.assignment;
   return 'Postulado';
 }
 function isArchived(c){ return !!c.archived; }
@@ -331,7 +332,7 @@ function renderList(){
         <p class="list-name">${escapeHtml(c.name)}</p>
         <p class="list-meta">${c.startDate ? 'Inicio ' + escapeHtml(c.startDate) : 'Sin fecha de inicio'}</p>
       </div>
-      ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Resultado final · ${rs.evaluators} de 3 evaluadores">${rs.score}</span>` : ''}
+      ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Resultado final · ${rs.evaluators} de ${EVALUATORS.length} evaluadores">${rs.score}</span>` : ''}
       <span class="list-status" style="background:${stage.bg}; color:${stage.fg}">${stage.key}</span>
       <div class="list-tags">
         ${c.whatsapp ? `<a href="${escapeHtml(waLink(c.whatsapp))}" target="_blank" rel="noopener" class="card-link" title="Escribir por WhatsApp" onclick="event.stopPropagation()"><i class="ti ti-brand-whatsapp" style="font-size:14px;vertical-align:-2px"></i></a>` : ''}
@@ -373,6 +374,7 @@ function totalComments(c){
   if((c.ximenaFeedback||'').trim()) n++;
   if((c.memoFeedback||'').trim()) n++;
   if((c.jochoFeedback||'').trim()) n++;
+  if((c.sergioFeedback||'').trim()) n++;
   return n;
 }
 function decisionColor(d){
@@ -398,7 +400,7 @@ function isStale(c){
   return d !== null && d >= STALE_DAYS;
 }
 function interviewDate(c){
-  const dates = [c.ximenaInterviewDate, c.memoInterviewDate, c.jochoInterviewDate].filter(Boolean);
+  const dates = [c.ximenaInterviewDate, c.memoInterviewDate, c.jochoInterviewDate, c.sergioInterviewDate].filter(Boolean);
   if(!dates.length) return '';
   const today = new Date().toISOString().slice(0,10);
   const upcoming = dates.filter(d=>d>=today).sort();
@@ -417,33 +419,31 @@ function stageDate(c){
   return null;
 }
 function panelSummary(c){
-  const votes = [c.ximenaDecision, c.memoDecision, c.jochoDecision];
+  const total = EVALUATORS.length;
+  const votes = EVALUATORS.map(e=>c[e.key+'Decision']);
   const done = votes.filter(v=>v).length;
   const yes = votes.filter(v=>v==='Yes').length;
   const no = votes.filter(v=>v==='No').length;
   const maybe = votes.filter(v=>v==='Maybe').length;
+  const mayoriaNo = Math.ceil(total * 2 / 3); // 3→2, 4→3
   let label = 'Sin evaluar', color = '#92939D', bg = '#EFF2F7', icon = '';
   if(done === 0){ /* default */ }
   else if(yes > 0 && no > 0){ label = 'Panel dividido'; color = '#854F0B'; bg = '#FAEEDA'; icon = 'ti-alert-triangle'; }
-  else if(done === 3 && yes === 3){ label = 'Panel a favor'; color = '#0F6E56'; bg = '#E1F5EE'; icon = 'ti-circle-check'; }
-  else if(done === 3 && no >= 2){ label = 'Panel en contra'; color = '#993C1D'; bg = '#FAECE7'; icon = 'ti-circle-x'; }
-  else { label = done + ' de 3 evaluaron'; color = '#242A42'; bg = '#EAFAFF'; icon = 'ti-hourglass'; }
+  else if(done === total && yes === total){ label = 'Panel a favor'; color = '#0F6E56'; bg = '#E1F5EE'; icon = 'ti-circle-check'; }
+  else if(done === total && no >= mayoriaNo){ label = 'Panel en contra'; color = '#993C1D'; bg = '#FAECE7'; icon = 'ti-circle-x'; }
+  else { label = done + ' de ' + total + ' evaluaron'; color = '#242A42'; bg = '#EAFAFF'; icon = 'ti-hourglass'; }
   return { label, color, bg, icon, done, yes, no, maybe };
 }
 function evalDots(c){
-  const evals = [
-    {ini:'X', d:c.ximenaDecision, name:'Ximena'},
-    {ini:'M', d:c.memoDecision, name:'Memo'},
-    {ini:'J', d:c.jochoDecision, name:'Jocho'}
-  ];
   const glyph = {'Yes':'✓', 'No':'✕', 'Maybe':'~'};
-  return `<span style="display:flex; gap:3px; align-items:center">` + evals.map(e=>{
-    const votado = !!e.d;
-    const bg = decisionColor(e.d);
+  return `<span style="display:flex; gap:3px; align-items:center">` + EVALUATORS.map(e=>{
+    const d = c[e.key+'Decision'];
+    const votado = !!d;
+    const bg = decisionColor(d);
     const style = votado
       ? `background:${bg}; color:#fff; border:1px solid ${bg}`
       : `background:#fff; color:#B4B2A9; border:1px dashed #C2CEDB`;
-    return `<span title="${e.name}: ${e.d || 'sin evaluar'}" style="${style}; height:18px; padding:0 5px; border-radius:9px; font-size:10px; font-weight:700; display:inline-flex; align-items:center; gap:2px; line-height:1">${e.ini}${votado ? '<span style="font-size:9px">'+glyph[e.d]+'</span>' : ''}</span>`;
+    return `<span title="${e.label}: ${d || 'sin evaluar'}" style="${style}; height:18px; padding:0 5px; border-radius:9px; font-size:10px; font-weight:700; display:inline-flex; align-items:center; gap:2px; line-height:1">${e.label[0].toUpperCase()}${votado ? '<span style="font-size:9px">'+glyph[d]+'</span>' : ''}</span>`;
   }).join('') + `</span>`;
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -459,6 +459,7 @@ const CRITERIA = [
 const EVALUATORS = [
   {key:'ximena', label:'Ximena', color:'#D85A30'},
   {key:'memo',   label:'Memo',   color:'#1D9E75'},
+  {key:'sergio', label:'Sergio', color:'#2D7FF9'},
   {key:'jocho',  label:'Jocho',  color:'#7F77DD'}
 ];
 function rubKey(evalKey, critKey){ return evalKey + 'Rub' + critKey; }
@@ -660,7 +661,7 @@ function renderFinalResult(c){
       <span class="final-score" style="background:${col.bg}; color:${col.fg}">${fs.score}<span style="font-size:12px;font-weight:600">/100</span></span>
       <div>
         <div class="final-title">Resultado final del panel</div>
-        <div class="final-sub">${fs.evaluators} de 3 evaluadores calificaron · promedio de sus scores</div>
+        <div class="final-sub">${fs.evaluators} de ${EVALUATORS.length} evaluadores calificaron · promedio de sus scores</div>
       </div>
     </div>
     <div class="crit-list">${crits}</div>`;
@@ -713,10 +714,12 @@ function blank(){
     offerDate:'', startDate:'', endDate:'',
     memoDecision:'', memoFeedback:'', memoInterviewDate:'', memoNoteDate:'',
     jochoDecision:'', jochoFeedback:'', jochoInterviewDate:'', jochoNoteDate:'',
+    sergioDecision:'', sergioFeedback:'', sergioInterviewDate:'', sergioNoteDate:'',
     ximenaDecision:'', ximenaFeedback:'', ximenaComp:'', ximenaInterviewDate:'', ximenaNoteDate:'',
     ximenaRubCultura:'', ximenaRubExperiencia:'', ximenaRubComunicacion:'', ximenaRubPotencial:'',
     memoRubCultura:'', memoRubExperiencia:'', memoRubComunicacion:'', memoRubPotencial:'',
     jochoRubCultura:'', jochoRubExperiencia:'', jochoRubComunicacion:'', jochoRubPotencial:'',
+    sergioRubCultura:'', sergioRubExperiencia:'', sergioRubComunicacion:'', sergioRubPotencial:'',
     ref1:'', ref2:'', comments:[], updatedAt:Date.now()};
 }
 
@@ -785,7 +788,7 @@ function renderMetrics(){
   const activos = vivos.filter(c=>ACTIVE_STAGES.includes(c.status));
   const estancados = vivos.filter(isStale);
   const contratados = vivos.filter(c=>c.status==='Contratado').length;
-  const pendientes = activos.filter(c=>panelSummary(c).done < 3).length;
+  const pendientes = activos.filter(c=>panelSummary(c).done < EVALUATORS.length).length;
   const divididos = vivos.filter(c=>{
     const p = panelSummary(c);
     return p.yes > 0 && p.no > 0;
@@ -870,6 +873,7 @@ function renderRoleFilter(){
       + '<option value="split">Panel dividido</option>'
       + '<option value="Ximena">Falta Ximena</option>'
       + '<option value="Memo">Falta Memo</option>'
+      + '<option value="Sergio">Falta Sergio</option>'
       + '<option value="Jocho">Falta Jocho</option>';
     pend.dataset.ready = '1';
   }
@@ -888,11 +892,12 @@ function matchesFilters(c){
 
   if(pending){
     const p = panelSummary(c);
-    if(pending === 'any' && p.done >= 3) return false;
+    if(pending === 'any' && p.done >= EVALUATORS.length) return false;
     else if(pending === 'split' && !(p.yes > 0 && p.no > 0)) return false;
     else if(pending === 'Ximena' && c.ximenaDecision) return false;
     else if(pending === 'Memo' && c.memoDecision) return false;
     else if(pending === 'Jocho' && c.jochoDecision) return false;
+    else if(pending === 'Sergio' && c.sergioDecision) return false;
   }
   return true;
 }
@@ -963,7 +968,7 @@ function render(){
                   <span class="card-status" style="background:${st.bg}; color:${st.fg}">${escapeHtml(c.status)}</span>
                 </div>
               </div>
-              ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Resultado final · ${rs.evaluators} de 3 evaluadores">${rs.score}</span>` : ''}
+              ${rs ? `<span class="score-badge" style="background:${scoreColor(rs.score).bg}; color:${scoreColor(rs.score).fg}" title="Resultado final · ${rs.evaluators} de ${EVALUATORS.length} evaluadores">${rs.score}</span>` : ''}
             </div>
             <div style="margin-top:8px">
               <span class="panel-chip" style="background:${p.bg}; color:${p.color}">${p.icon ? `<i class="ti ${p.icon}" style="font-size:12px;vertical-align:-1px;margin-right:3px"></i>` : ''}${p.label}</span>
@@ -1209,6 +1214,23 @@ function openModal(id){
         <textarea id="fMemoFeedback" placeholder="Comentarios de Memo">${escapeHtml(c.memoFeedback)}</textarea>
       </div>
 
+      <div class="eval-card" style="border-left-color:#2D7FF9">
+        <div class="eval-header">
+          <span class="eval-avatar" style="background:#2D7FF9">S</span>
+          <span class="eval-name">Sergio</span>
+          <button type="button" class="mini-link" style="margin-left:auto" onclick="openAiEval('sergio')"><i class="ti ti-sparkles" style="font-size:12px;vertical-align:-1px;margin-right:2px"></i>Evaluar con IA</button>
+        </div>
+        <label>Decision</label>
+        <select id="fSergioDecision">${decisionOptions(c.sergioDecision)}</select>
+        <div class="row2">
+          <div>${field('fSergioInterviewDate','Fecha entrevista',c.sergioInterviewDate,'','date')}</div>
+          <div>${field('fSergioNoteDate','Fecha nota',c.sergioNoteDate,'','date')}</div>
+        </div>
+        ${evalRubricInputs(c, 'sergio')}
+        <label>Comentario</label>
+        <textarea id="fSergioFeedback" placeholder="Comentarios de Sergio">${escapeHtml(c.sergioFeedback)}</textarea>
+      </div>
+
       <div class="eval-card" style="border-left-color:#7F77DD">
         <div class="eval-header">
           <span class="eval-avatar" style="background:#7F77DD">J</span>
@@ -1297,6 +1319,10 @@ function openModal(id){
     c.jochoInterviewDate = document.getElementById('fJochoInterviewDate').value;
     c.jochoNoteDate = document.getElementById('fJochoNoteDate').value;
     c.jochoFeedback = document.getElementById('fJochoFeedback').value.trim();
+    c.sergioDecision = document.getElementById('fSergioDecision').value.trim();
+    c.sergioInterviewDate = document.getElementById('fSergioInterviewDate').value;
+    c.sergioNoteDate = document.getElementById('fSergioNoteDate').value;
+    c.sergioFeedback = document.getElementById('fSergioFeedback').value.trim();
     c.ximenaDecision = document.getElementById('fXimenaDecision').value.trim();
     c.ximenaComp = document.getElementById('fXimenaComp').value.trim();
     c.ximenaInterviewDate = document.getElementById('fXimenaInterviewDate').value;
