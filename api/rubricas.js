@@ -9,7 +9,7 @@
 export const RUBRICAS = {
   BDR: {
     rol: 'BDR',
-    duracion: '45 min · outbound + soft skills',
+    duracion: '30 min · outbound + soft skills',
     bloques: [
       {
         nombre: 'Prospección y actividad',
